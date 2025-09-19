@@ -1,0 +1,7 @@
+/* index.css */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: black; /* opcional si querés que toda la página sea negra */
+}
