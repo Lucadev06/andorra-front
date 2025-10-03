@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Inicio from "./inicio/Inicio";
+import Admin from "./admin/Admin";
+import Turnos from "./turnos/Turnos";
+
 function App() {
   return (
     <BrowserRouter>
@@ -7,9 +10,10 @@ function App() {
         {/* Ruta inicial */}
         <Route path="/" element={<Inicio />} />
         {/* Ejemplo: en el futuro agregamos la página de turnos */}
-        <Route path="/turnos" element={<h1>Página de turnos</h1>} />
+        <Route path="/turnos" element={<Turnos />} />
         {/* Redirección fallback */}
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/admin" element={<Admin/>} />
       </Routes>
     </BrowserRouter>
   );

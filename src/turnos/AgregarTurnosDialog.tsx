@@ -11,90 +11,156 @@ import {
   Paper,
   TextField,
 } from "@mui/material";
-import Papa from "papaparse";
-import type { ParseResult } from "papaparse";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import BoyIcon from "@mui/icons-material/Boy";
 import { GiBeard } from "react-icons/gi";
+import { TurnosContext } from "../context/TurnosContextTypes";
 
 interface AgregarTurnosDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-interface Turno {
-  Barbero: string;
-  Servicio: string;
-  Fecha: string;
-  Hora: string;
-  Cliente: string;
-  Estado: string;
+interface Peluquero {
+  _id: string;
+  nombre: string;
+  servicios: string[];
 }
 
+// Helper function to generate time slots
+const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
+  const horarios = [];
+  let [hora, minuto] = inicio.split(":").map(Number);
+
+  while (true) {
+    const horarioActual = `${String(hora).padStart(2, "0")}:${String(
+      minuto
+    ).padStart(2, "0")}`;
+    if (horarioActual >= fin) break;
+    horarios.push(horarioActual);
+
+    minuto += intervalo;
+    if (minuto >= 60) {
+      hora += Math.floor(minuto / 60);
+      minuto %= 60;
+    }
+  }
+  return horarios;
+};
+
 export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDialogProps) {
-  const [turnos, setTurnos] = useState<Turno[]>([]);
+  // 1. Hooks
+  const context = useContext(TurnosContext);
+  const [peluqueros, setPeluqueros] = useState<Peluquero[]>([]);
+  const [peluqueroSeleccionado, setPeluqueroSeleccionado] = useState<string>("");
   const [servicio, setServicio] = useState<string>("");
-  const [barbero, setBarbero] = useState<string>("");
   const [fecha, setFecha] = useState<string>("");
+  const [horarios, setHorarios] = useState<string[]>([]);
   const [hora, setHora] = useState<string>("");
+  const [nombre, setNombre] = useState<string>("");
 
-  const csvUrl =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRmOwk26sXsDPi_Pt_OXq8gcemHEMjErLe1ZECrcIauu1ZEl3xJAsB9r2BsFWpXoYKPGmsUAP-Ftrf4/pub?output=csv";
+  const API_URL = "https://andorra-back-1.onrender.com/api";
 
+  // Effect for fetching barbers
   useEffect(() => {
-    Papa.parse<Turno>(csvUrl, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results: ParseResult<Turno>) => setTurnos(results.data),
-      error: (err: Error) => console.error("Error al traer turnos:", err.message),
-    });
-  }, []);
+    const fetchPeluqueros = async () => {
+      if (open) {
+        try {
+          const res = await fetch(`${API_URL}/peluqueros`);
+          const data = (await res.json()) as Peluquero[];
+          setPeluqueros(data);
+        } catch (err) {
+          console.error("Error obteniendo peluqueros:", err);
+        }
+      }
+    };
+    void fetchPeluqueros();
+  }, [open]);
 
-  // Barberos que ofrecen el servicio elegido
-  const barberosUnicos = Array.from(
-    new Set(
-      turnos
-        .filter((t) => !servicio || t.Servicio.toLowerCase().includes(servicio))
-        .map((t) => t.Barbero)
-    )
-  );
+  // Effect for calculating available slots
+  useEffect(() => {
+    if (context && peluqueroSeleccionado && fecha) {
+      const { turnos } = context;
+      const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
+      const turnosOcupados = turnos
+        .filter(
+          (t) =>
+            (typeof t.peluquero === 'string' ? t.peluquero : t.peluquero._id) === peluqueroSeleccionado && t.fecha === fecha
+        )
+        .map((t) => t.hora);
 
-  const turnosFiltrados = turnos.filter(
-    (t) =>
-      (!servicio || t.Servicio.toLowerCase().includes(servicio)) &&
-      (!barbero || t.Barbero === barbero) &&
-      (!fecha || t.Fecha === fecha) &&
-      t.Estado.toLowerCase() === "libre"
-  );
+      const horariosLibres = todosLosHorarios.filter(
+        (h) => !turnosOcupados.includes(h)
+      );
+      setHorarios(horariosLibres);
+    } else {
+      setHorarios([]);
+    }
+  }, [peluqueroSeleccionado, fecha, context]); // Depend on context object
 
-  const horariosUnicos = Array.from(new Set(turnosFiltrados.map((t) => t.Hora)));
+  // Effect for cleaning up the dialog state
+  useEffect(() => {
+    if (!open) {
+      setFecha("");
+      setHora("");
+      setNombre("");
+      setPeluqueroSeleccionado("");
+      setServicio("");
+      setHorarios([]);
+    }
+  }, [open]);
 
-  const handleConfirm = () => {
-    if (!servicio || !barbero || !fecha || !hora) {
-      alert("Seleccioná servicio, barbero, fecha y horario antes de confirmar.");
+  // 2. Guard clause for context
+  if (!context) {
+    return null; // Or a loading spinner
+  }
+
+  // 3. Destructure from context
+  const { addTurno } = context;
+
+  // 4. Event Handlers
+  async function handleConfirm() {
+    if (!servicio || !peluqueroSeleccionado || !fecha || !hora || !nombre) {
+      alert("Completa todos los campos: servicio, barbero, nombre, fecha y horario.");
       return;
     }
-    alert(`Turno reservado: ${servicio} con ${barbero} el ${fecha} a las ${hora}`);
-    onClose();
-  };
 
+    try {
+      await addTurno({
+        cliente: nombre,
+        peluquero: peluqueroSeleccionado,
+        fecha,
+        hora,
+        servicio,
+      });
+      alert("✅ Turno reservado con éxito");
+      onClose();
+    } catch (err: unknown) {
+      console.error("Error creando turno:", err);
+      if (err instanceof Error && err.message.includes("409")) {
+        alert("❌ Este turno ya está ocupado. Por favor, elegí otro horario.");
+      } else {
+        alert("Error al reservar el turno.");
+      }
+    }
+  }
+
+  // 5. Render
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
       <DialogTitle sx={{ fontWeight: "bold" }}>📅 Sacar turno</DialogTitle>
 
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
-        {/* 1. Selección de servicio */}
         <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
           Seleccioná el servicio:
         </Typography>
         <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(120px, 1fr))" gap={2}>
-          {[
-            { key: "corte", label: "Corte", icon: <ContentCutIcon /> },
-            { key: "barba", label: "Barba", icon: <GiBeard size={22} /> },
+          {[ 
+            { key: "Corte", label: "Corte", icon: <ContentCutIcon /> },
+            { key: "Barba", label: "Barba", icon: <GiBeard size={22} /> },
             {
-              key: "corte + barba",
+              key: "Corte + Barba",
               label: "Corte + Barba",
               icon: (
                 <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
@@ -108,7 +174,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
               elevation={servicio === s.key ? 6 : 1}
               onClick={() => {
                 setServicio(s.key);
-                setBarbero("");
+                setPeluqueroSeleccionado("");
                 setFecha("");
                 setHora("");
               }}
@@ -131,18 +197,18 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
           ))}
         </Box>
 
-        {/* 2. Selección de barbero */}
         <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
           Seleccioná tu barbero:
         </Typography>
         <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(140px, 1fr))" gap={2}>
-          {barberosUnicos.map((b) => (
+          {peluqueros.map((p) => (
             <Paper
-              key={b}
-              elevation={barbero === b ? 6 : 1}
-              onClick={() => {
+              key={p._id}
+              elevation={peluqueroSeleccionado === p._id ? 6 : 1}
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                e.stopPropagation();
                 if (!servicio) return;
-                setBarbero(b);
+                setPeluqueroSeleccionado(p._id);
                 setFecha("");
                 setHora("");
               }}
@@ -150,20 +216,36 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
                 p: 2,
                 textAlign: "center",
                 cursor: servicio ? "pointer" : "not-allowed",
-                backgroundColor: barbero === b ? "#f2a900" : "white",
-                color: servicio ? (barbero === b ? "black" : "inherit") : "gray",
+                backgroundColor:
+                  peluqueroSeleccionado === p._id ? "#f2a900" : "white",
+                color: servicio
+                  ? peluqueroSeleccionado === p._id
+                    ? "black"
+                    : "inherit"
+                  : "gray",
                 borderRadius: 2,
                 transition: "all 0.25s ease",
                 opacity: servicio ? 1 : 0.5,
               }}
             >
               <BoyIcon sx={{ fontSize: 40 }} />
-              <Typography sx={{ mt: 1, fontWeight: "bold" }}>{b}</Typography>
+              <Typography sx={{ mt: 1, fontWeight: "bold" }}>{p.nombre}</Typography>
             </Paper>
           ))}
         </Box>
 
-        {/* 3. Fecha */}
+        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+          Tus datos:
+        </Typography>
+        <Box display="flex" flexDirection="column" gap={2}>
+          <TextField
+            fullWidth
+            label="Nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+          />
+        </Box>
+
         <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
           Seleccioná la fecha:
         </Typography>
@@ -172,14 +254,13 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
           fullWidth
           value={fecha}
           InputLabelProps={{ shrink: true }}
-          disabled={!barbero}
+          disabled={!peluqueroSeleccionado}
           onChange={(e) => {
             setFecha(e.target.value);
             setHora("");
           }}
         />
 
-        {/* 4. Horario */}
         <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
           Seleccioná un horario:
         </Typography>
@@ -189,8 +270,8 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
           onChange={(_, value) => setHora(value)}
           sx={{ flexWrap: "wrap", gap: 1 }}
         >
-          {horariosUnicos.length > 0 ? (
-            horariosUnicos.map((h) => (
+          {horarios.length > 0 ? (
+            horarios.map((h) => (
               <ToggleButton
                 key={h}
                 value={h}
