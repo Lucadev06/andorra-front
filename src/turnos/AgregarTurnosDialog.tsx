@@ -127,10 +127,12 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
     }
 
     try {
+      const fechaISO = new Date(fecha).toISOString();
+
       await addTurno({
         cliente: nombre,
         peluquero: peluqueroSeleccionado,
-        fecha,
+        fecha: fechaISO,
         hora,
         servicio,
       });
