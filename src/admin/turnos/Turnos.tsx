@@ -9,6 +9,7 @@ import {
   Paper,
   IconButton,
 } from "@mui/material";
+import { format } from "date-fns";
 import EditIcon from "@mui/icons-material/Edit";
 import { useContext, useState } from "react";
 import { EditarTurnoDialog } from "./EditarTurnoDialog";
@@ -65,13 +66,7 @@ function Turnos() {
                   </TableCell>
                   <TableCell>{t.cliente}</TableCell>
                   <TableCell>{t.servicio || "-"}</TableCell>
-                  <TableCell>
-                    {new Date(t.fecha).toLocaleDateString("es-AR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                    })}
-                  </TableCell>
+                  <TableCell>{format(new Date(t.fecha), "dd/MM/yyyy")}</TableCell>
                   <TableCell>{t.hora}</TableCell>
                   <TableCell align="center">
                     <IconButton

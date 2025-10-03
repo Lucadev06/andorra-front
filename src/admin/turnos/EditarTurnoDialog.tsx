@@ -8,6 +8,7 @@ import {
   TextField,
   MenuItem,
 } from "@mui/material";
+import { format } from "date-fns";
 import { useEffect, useState } from "react";
 
 interface Peluquero {
@@ -79,7 +80,7 @@ export function EditarTurnoDialog({
       setInitialTurno(initial);
       setPeluqueroSeleccionado(initial.peluqueroId);
       setCliente(turno.cliente || "");
-      setFecha(turno.fecha || "");
+      setFecha(format(new Date(turno.fecha), "yyyy-MM-dd") || "");
       setHora(turno.hora || "");
       setServicio(turno.servicio || "");
       setHasChanged(false);
@@ -120,7 +121,7 @@ export function EditarTurnoDialog({
       ...turno,
       peluquero: peluqueroCompleto || turno.peluquero,
       cliente,
-      fecha,
+      fecha: new Date(fecha).toISOString(),
       hora,
       servicio,
     };
