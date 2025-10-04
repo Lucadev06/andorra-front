@@ -8,7 +8,10 @@ import {
   TableRow,
   Paper,
   IconButton,
+  Tooltip,
 } from "@mui/material";
+import { format, isValid, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import EditIcon from "@mui/icons-material/Edit";
 import { useContext, useState } from "react";
 import { EditarTurnoDialog } from "./EditarTurnoDialog";
@@ -53,8 +56,24 @@ function Turnos() {
           <TableBody>
             {[...turnos]
               .sort((a, b) => {
-                const dateA = new Date(a.fecha).getTime();
-                const dateB = new Date(b.fecha).getTime();
+                const parsedDateA = parseISO(a.fecha);
+                const parsedDateB = parseISO(b.fecha);
+
+                const dateA = isValid(parsedDateA)
+                  ? new Date(
+                      parsedDateA.getUTCFullYear(),
+                      parsedDateA.getUTCMonth(),
+                      parsedDateA.getUTCDate()
+                    ).getTime()
+                  : NaN;
+                const dateB = isValid(parsedDateB)
+                  ? new Date(
+                      parsedDateB.getUTCFullYear(),
+                      parsedDateB.getUTCMonth(),
+                      parsedDateB.getUTCDate()
+                    ).getTime()
+                  : NaN;
+
                 if (isNaN(dateA) && isNaN(dateB)) return 0;
                 if (isNaN(dateA)) return 1;
                 if (isNaN(dateB)) return -1;
@@ -70,8 +89,29 @@ function Turnos() {
                   <TableCell>{t.cliente}</TableCell>
                   <TableCell>{t.servicio || "-"}</TableCell>
                   <TableCell>
-                    {/* mostramos yyyy-MM-dd cortando el ISO */}
-                    {t.fecha ? t.fecha.substring(0, 10) : "-"}
+                    {(() => {
+                      const parsedDate = parseISO(t.fecha);
+                      if (!isValid(parsedDate)) return "-";
+
+                      // Adjust for "one day behind" issue if the date is interpreted as UTC
+                      // and needs to be displayed as local date.
+                      // This creates a new Date object with the UTC date components
+                      // but in the local timezone, effectively setting the time to midnight.
+                      const adjustedDate = new Date(
+                        parsedDate.getUTCFullYear(),
+                        parsedDate.getUTCMonth(),
+                        parsedDate.getUTCDate()
+                      );
+
+                      const formattedDate = format(adjustedDate, "dd/MM/yyyy");
+                      const descriptiveDate = format(adjustedDate, "d 'de' MMMM yyyy", { locale: es });
+
+                      return (
+                        <Tooltip title={descriptiveDate}>
+                          <span>{formattedDate}</span>
+                        </Tooltip>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>{t.hora}</TableCell>
                   <TableCell align="center">
