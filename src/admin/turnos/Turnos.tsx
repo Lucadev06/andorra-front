@@ -9,7 +9,6 @@ import {
   Paper,
   IconButton,
 } from "@mui/material";
-import { format } from "date-fns";
 import EditIcon from "@mui/icons-material/Edit";
 import { useContext, useState } from "react";
 import { EditarTurnoDialog } from "./EditarTurnoDialog";
@@ -19,7 +18,7 @@ interface Turno {
   _id: string;
   peluquero: string | { _id: string; nombre: string };
   cliente: string;
-  fecha: string;
+  fecha: string; // viene como "2025-10-06T00:00:00.000Z"
   hora: string;
   servicio?: string;
 }
@@ -31,6 +30,7 @@ function Turnos() {
   if (!context) {
     return <p>Cargando...</p>;
   }
+
   const { turnos, updateTurno } = context;
 
   return (
@@ -52,11 +52,14 @@ function Turnos() {
           </TableHead>
           <TableBody>
             {[...turnos]
-              .sort(
-                (a, b) =>
-                  new Date(`${a.fecha}T${a.hora}`).getTime() -
-                  new Date(`${b.fecha}T${b.hora}`).getTime()
-              )
+              .sort((a, b) => {
+                const dateA = new Date(a.fecha).getTime();
+                const dateB = new Date(b.fecha).getTime();
+                if (isNaN(dateA) && isNaN(dateB)) return 0;
+                if (isNaN(dateA)) return 1;
+                if (isNaN(dateB)) return -1;
+                return dateA - dateB;
+              })
               .map((t) => (
                 <TableRow key={t._id}>
                   <TableCell>
@@ -66,7 +69,10 @@ function Turnos() {
                   </TableCell>
                   <TableCell>{t.cliente}</TableCell>
                   <TableCell>{t.servicio || "-"}</TableCell>
-                  <TableCell>{format(new Date(t.fecha), "dd/MM/yyyy")}</TableCell>
+                  <TableCell>
+                    {/* mostramos yyyy-MM-dd cortando el ISO */}
+                    {t.fecha ? t.fecha.substring(0, 10) : "-"}
+                  </TableCell>
                   <TableCell>{t.hora}</TableCell>
                   <TableCell align="center">
                     <IconButton

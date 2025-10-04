@@ -86,7 +86,8 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       const turnosOcupados = turnos
         .filter(
           (t) =>
-            (typeof t.peluquero === 'string' ? t.peluquero : t.peluquero._id) === peluqueroSeleccionado && t.fecha === fecha
+            (typeof t.peluquero === 'string' ? t.peluquero : t.peluquero._id) === peluqueroSeleccionado &&
+            new Date(t.fecha).toISOString().split("T")[0] === fecha
         )
         .map((t) => t.hora);
 
@@ -127,12 +128,10 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
     }
 
     try {
-      const fechaISO = new Date(fecha).toISOString();
-
       await addTurno({
         cliente: nombre,
         peluquero: peluqueroSeleccionado,
-        fecha: fechaISO,
+        fecha: fecha, // Pasar la fecha directamente
         hora,
         servicio,
       });

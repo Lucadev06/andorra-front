@@ -1,4 +1,3 @@
-"use client";
 import {
   Dialog,
   DialogTitle,
@@ -8,7 +7,6 @@ import {
   TextField,
   MenuItem,
 } from "@mui/material";
-import { format } from "date-fns";
 import { useEffect, useState } from "react";
 
 interface Peluquero {
@@ -20,7 +18,7 @@ interface Turno {
   _id: string;
   peluquero: string | { _id: string; nombre: string };
   cliente: string;
-  fecha: string;
+  fecha: string; // ISO string, ej: "2025-10-06T00:00:00.000Z"
   hora: string;
   servicio?: string;
 }
@@ -33,7 +31,7 @@ interface EditarTurnoDialogProps {
   open: boolean;
   onClose: () => void;
   turno: Turno;
-  onUpdated: (turnoEditado: Turno) => void; // 👈 ahora coincide
+  onUpdated: (turnoEditado: Turno) => void;
 }
 
 export function EditarTurnoDialog({
@@ -48,9 +46,7 @@ export function EditarTurnoDialog({
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
   const [servicio, setServicio] = useState("");
-  const [initialTurno, setInitialTurno] = useState<TurnoConPeluqueroId | null>(
-    null
-  );
+  const [initialTurno, setInitialTurno] = useState<TurnoConPeluqueroId | null>(null);
   const [hasChanged, setHasChanged] = useState(false);
 
   const API_URL = "https://andorra-back-1.onrender.com/api";
@@ -80,7 +76,8 @@ export function EditarTurnoDialog({
       setInitialTurno(initial);
       setPeluqueroSeleccionado(initial.peluqueroId);
       setCliente(turno.cliente || "");
-      setFecha(format(new Date(turno.fecha), "yyyy-MM-dd") || "");
+      // 👉 usar substring(0,10) para extraer "yyyy-MM-dd"
+      setFecha(turno.fecha ? turno.fecha.substring(0, 10) : "");
       setHora(turno.hora || "");
       setServicio(turno.servicio || "");
       setHasChanged(false);
@@ -89,23 +86,15 @@ export function EditarTurnoDialog({
 
   useEffect(() => {
     if (!initialTurno) return;
-
     const changes =
       initialTurno.peluqueroId !== peluqueroSeleccionado ||
       initialTurno.cliente !== cliente ||
-      initialTurno.fecha !== fecha ||
+      initialTurno.fecha.substring(0, 10) !== fecha ||
       initialTurno.hora !== hora ||
       initialTurno.servicio !== servicio;
 
     setHasChanged(changes);
-  }, [
-    peluqueroSeleccionado,
-    cliente,
-    fecha,
-    hora,
-    servicio,
-    initialTurno,
-  ]);
+  }, [peluqueroSeleccionado, cliente, fecha, hora, servicio, initialTurno]);
 
   async function handleSave() {
     if (!peluqueroSeleccionado || !cliente || !fecha || !hora) {
@@ -121,7 +110,7 @@ export function EditarTurnoDialog({
       ...turno,
       peluquero: peluqueroCompleto || turno.peluquero,
       cliente,
-      fecha: new Date(fecha).toISOString(),
+      fecha, // ya es yyyy-MM-dd string
       hora,
       servicio,
     };
@@ -143,9 +132,7 @@ export function EditarTurnoDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>✏️ Editar turno</DialogTitle>
-      <DialogContent
-        sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
-      >
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
         <TextField
           select
           label="Peluquero"
