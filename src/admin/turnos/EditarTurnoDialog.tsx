@@ -8,19 +8,11 @@ import {
   MenuItem,
 } from "@mui/material";
 import { useEffect, useState } from "react";
+import { type Turno } from "../../context/TurnosContextTypes";
 
 interface Peluquero {
   _id: string;
   nombre: string;
-}
-
-interface Turno {
-  _id: string;
-  peluquero: string | { _id: string; nombre: string };
-  cliente: string;
-  fecha: string; // ISO string, ej: "2025-10-06T00:00:00.000Z"
-  hora: string;
-  servicio?: string;
 }
 
 interface TurnoConPeluqueroId extends Turno {
@@ -34,7 +26,7 @@ interface EditarTurnoDialogProps {
   onUpdated: (turnoEditado: Turno) => void;
 }
 
-export function EditarTurnoDialog({
+export default function EditarTurnoDialog({
   open,
   onClose,
   turno,
@@ -43,6 +35,7 @@ export function EditarTurnoDialog({
   const [peluqueros, setPeluqueros] = useState<Peluquero[]>([]);
   const [peluqueroSeleccionado, setPeluqueroSeleccionado] = useState("");
   const [cliente, setCliente] = useState("");
+  const [mail, setMail] = useState("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
   const [servicio, setServicio] = useState("");
@@ -76,6 +69,7 @@ export function EditarTurnoDialog({
       setInitialTurno(initial);
       setPeluqueroSeleccionado(initial.peluqueroId);
       setCliente(turno.cliente || "");
+      setMail(turno.mail || "");
       // 👉 usar substring(0,10) para extraer "yyyy-MM-dd"
       setFecha(turno.fecha ? turno.fecha.substring(0, 10) : "");
       setHora(turno.hora || "");
@@ -89,12 +83,13 @@ export function EditarTurnoDialog({
     const changes =
       initialTurno.peluqueroId !== peluqueroSeleccionado ||
       initialTurno.cliente !== cliente ||
+      initialTurno.mail !== mail ||
       initialTurno.fecha.substring(0, 10) !== fecha ||
       initialTurno.hora !== hora ||
       initialTurno.servicio !== servicio;
 
     setHasChanged(changes);
-  }, [peluqueroSeleccionado, cliente, fecha, hora, servicio, initialTurno]);
+  }, [peluqueroSeleccionado, cliente, mail, fecha, hora, servicio, initialTurno]);
 
   async function handleSave() {
     if (!peluqueroSeleccionado || !cliente || !fecha || !hora) {
@@ -103,13 +98,14 @@ export function EditarTurnoDialog({
     }
 
     const peluqueroCompleto = peluqueros.find(
-      (p) => p._id === peluqueroSeleccionado
+      (p: Peluquero) => p._id === peluqueroSeleccionado
     );
 
     const turnoActualizado = {
       ...turno,
       peluquero: peluqueroCompleto || turno.peluquero,
       cliente,
+      mail,
       fecha, // ya es yyyy-MM-dd string
       hora,
       servicio,
@@ -150,6 +146,12 @@ export function EditarTurnoDialog({
           label="Cliente"
           value={cliente}
           onChange={(e) => setCliente(e.target.value)}
+        />
+
+        <TextField
+          label="Mail"
+          value={mail}
+          onChange={(e) => setMail(e.target.value)}
         />
 
         <TextField

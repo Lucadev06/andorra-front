@@ -14,17 +14,8 @@ import { format, isValid, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import EditIcon from "@mui/icons-material/Edit";
 import { useContext, useState } from "react";
-import { EditarTurnoDialog } from "./EditarTurnoDialog";
-import { TurnosContext } from "../../context/TurnosContextTypes";
-
-interface Turno {
-  _id: string;
-  peluquero: string | { _id: string; nombre: string };
-  cliente: string;
-  fecha: string; // viene como "2025-10-06T00:00:00.000Z"
-  hora: string;
-  servicio?: string;
-}
+import EditarTurnoDialog from "./EditarTurnoDialog";
+import { TurnosContext, type Turno } from "../../context/TurnosContextTypes";
 
 function Turnos() {
   const context = useContext(TurnosContext);

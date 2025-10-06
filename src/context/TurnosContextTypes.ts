@@ -10,6 +10,7 @@ export interface Turno {
   _id:string;
   peluquero: string | Peluquero;
   cliente: string;
+  mail: string;
   fecha: string;
   hora: string;
   servicio?: string;

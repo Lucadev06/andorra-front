@@ -1,11 +1,13 @@
 import { Box, Button } from "@mui/material";
 import { useState } from "react";
 import AgregarTurnosDialog from "../turnos/AgregarTurnosDialog";
+import MisTurnosDialog from "../turnos/MisTurnosDialog";
 import { Instagram } from "@mui/icons-material";
 import { mainContainerStyles, logoStyles, buttonStylesInicio } from "../components/styles";
 
 export default function Inicio() {
   const [openDialog, setOpenDialog] = useState(false);
+  const [openMisTurnos, setOpenMisturnos] = useState(false)
   
   return (
     <>
@@ -25,6 +27,16 @@ export default function Inicio() {
         >
           Sacar turno
         </Button>
+
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          sx={buttonStylesInicio}
+          onClick={() => setOpenMisturnos(true)}
+        >
+          Mis turnos
+        </Button>
         <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
           <Button component="a" href="https://www.instagram.com/andorra.barberclub/?hl=es" target="_blank" sx={{ color: 'white' }}>
             <Instagram />
@@ -35,6 +47,11 @@ export default function Inicio() {
       <AgregarTurnosDialog
         open={openDialog}
         onClose={() => setOpenDialog(false)}
+      />
+
+      <MisTurnosDialog
+        open={openMisTurnos}
+        onClose={() => setOpenMisturnos(false)}
       />
     </>
   );
