@@ -59,6 +59,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
   const [horarios, setHorarios] = useState<string[]>([]);
   const [hora, setHora] = useState<string>("");
   const [nombre, setNombre] = useState<string>("");
+  const [mail, setMail] = useState<string>("");
 
   const API_URL = "https://andorra-back-1.onrender.com/api";
 
@@ -106,6 +107,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       setFecha("");
       setHora("");
       setNombre("");
+      setMail("");
       setPeluqueroSeleccionado("");
       setServicio("");
       setHorarios([]);
@@ -122,14 +124,24 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
 
   // 4. Event Handlers
   async function handleConfirm() {
-    if (!servicio || !peluqueroSeleccionado || !fecha || !hora || !nombre) {
-      alert("Completa todos los campos: servicio, barbero, nombre, fecha y horario.");
+    if (!context) {
+      return;
+    }
+    if (!servicio || !peluqueroSeleccionado || !fecha || !hora || !nombre || !mail) {
+      alert("Completa todos los campos: servicio, barbero, nombre, mail, fecha y horario.");
+      return;
+    }
+
+    const existingTurno = context.turnos.find(turno => turno.mail === mail);
+    if (existingTurno) {
+      alert("Ya tienes un turno registrado con este email.");
       return;
     }
 
     try {
       await addTurno({
         cliente: nombre,
+        mail,
         peluquero: peluqueroSeleccionado,
         fecha: fecha, // Pasar la fecha directamente
         hora,
@@ -244,6 +256,12 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
             label="Nombre"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
+          />
+          <TextField
+            fullWidth
+            label="Email"
+            value={mail}
+            onChange={(e) => setMail(e.target.value)}
           />
         </Box>
 
