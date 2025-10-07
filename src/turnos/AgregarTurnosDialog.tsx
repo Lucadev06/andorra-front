@@ -1,3 +1,9 @@
+import { useContext, useEffect, useState } from "react";
+import ContentCutIcon from "@mui/icons-material/ContentCut";
+import BoyIcon from "@mui/icons-material/Boy";
+import { GiBeard } from "react-icons/gi";
+import { TurnosContext } from "../context/TurnosContextTypes";
+import { useAuth } from '../context/AuthContext';
 import {
   Dialog,
   DialogTitle,
@@ -10,12 +16,12 @@ import {
   Box,
   Paper,
   TextField,
+  CircularProgress
 } from "@mui/material";
-import { useContext, useEffect, useState } from "react";
-import ContentCutIcon from "@mui/icons-material/ContentCut";
-import BoyIcon from "@mui/icons-material/Boy";
-import { GiBeard } from "react-icons/gi";
-import { TurnosContext } from "../context/TurnosContextTypes";
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { es } from 'date-fns/locale';
 
 interface AgregarTurnosDialogProps {
   open: boolean;
@@ -49,17 +55,36 @@ const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
   return horarios;
 };
 
+// Feriados (formato YYYY-MM-DD)
+const feriados: string[] = [
+  // "2024-12-25", 
+  // "2025-01-01",
+];
+
+const isDomingo = (date: Date) => {
+  return date.getDay() === 0; // 0 es Domingo
+};
+
+const isFeriado = (date: Date) => {
+  const dateString = date.toISOString().split("T")[0];
+  return feriados.includes(dateString);
+};
+
+const shouldDisableDate = (date: Date) => {
+  return isDomingo(date) || isFeriado(date);
+};
+
 export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDialogProps) {
   // 1. Hooks
   const context = useContext(TurnosContext);
+  const { user, isAuthenticated } = useAuth();
   const [peluqueros, setPeluqueros] = useState<Peluquero[]>([]);
   const [peluqueroSeleccionado, setPeluqueroSeleccionado] = useState<string>("");
   const [servicio, setServicio] = useState<string>("");
-  const [fecha, setFecha] = useState<string>("");
+  const [fecha, setFecha] = useState<Date | null>(null);
   const [horarios, setHorarios] = useState<string[]>([]);
   const [hora, setHora] = useState<string>("");
-  const [nombre, setNombre] = useState<string>("");
-  const [mail, setMail] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const API_URL = "https://andorra-back-1.onrender.com/api";
 
@@ -67,7 +92,9 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
   useEffect(() => {
     const fetchPeluqueros = async () => {
       if (open) {
+        setIsLoading(true);
         try {
+
           const res = await fetch(`${API_URL}/peluqueros`);
           const data = (await res.json()) as Peluquero[];
           setPeluqueros(data);
@@ -77,6 +104,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       }
     };
     void fetchPeluqueros();
+    setIsLoading(false);
   }, [open]);
 
   // Effect for calculating available slots
@@ -84,11 +112,12 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
     if (context && peluqueroSeleccionado && fecha) {
       const { turnos } = context;
       const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
+      const fechaISO = fecha.toISOString().split("T")[0];
       const turnosOcupados = turnos
         .filter(
           (t) =>
             (typeof t.peluquero === 'string' ? t.peluquero : t.peluquero._id) === peluqueroSeleccionado &&
-            new Date(t.fecha).toISOString().split("T")[0] === fecha
+            new Date(t.fecha).toISOString().split("T")[0] === fechaISO
         )
         .map((t) => t.hora);
 
@@ -104,10 +133,8 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
   // Effect for cleaning up the dialog state
   useEffect(() => {
     if (!open) {
-      setFecha("");
+      setFecha(null);
       setHora("");
-      setNombre("");
-      setMail("");
       setPeluqueroSeleccionado("");
       setServicio("");
       setHorarios([]);
@@ -124,26 +151,24 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
 
   // 4. Event Handlers
   async function handleConfirm() {
+    if (!isAuthenticated || !user) {
+      alert("Debes iniciar sesión para sacar un turno.");
+      return;
+    }
     if (!context) {
       return;
     }
-    if (!servicio || !peluqueroSeleccionado || !fecha || !hora || !nombre || !mail) {
-      alert("Completa todos los campos: servicio, barbero, nombre, mail, fecha y horario.");
-      return;
-    }
-
-    const existingTurno = context.turnos.find(turno => turno.mail === mail);
-    if (existingTurno) {
-      alert("Ya tienes un turno registrado con este email.");
+    if (!servicio || !peluqueroSeleccionado || !fecha || !hora) {
+      alert("Completa todos los campos: servicio, barbero, fecha y horario.");
       return;
     }
 
     try {
       await addTurno({
-        cliente: nombre,
-        mail,
+        cliente: user.name,
+        mail: user.email,
         peluquero: peluqueroSeleccionado,
-        fecha: fecha, // Pasar la fecha directamente
+        fecha: fecha.toISOString().split("T")[0],
         hora,
         servicio,
       });
@@ -161,169 +186,209 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
 
   // 5. Render
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
-      <DialogTitle sx={{ fontWeight: "bold" }}>📅 Sacar turno</DialogTitle>
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
+        {isLoading && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              backgroundColor: "rgba(255, 255, 255, 0.7)",
+              zIndex: 10,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-          Seleccioná el servicio:
-        </Typography>
-        <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(120px, 1fr))" gap={2}>
-          {[ 
-            { key: "Corte", label: "Corte", icon: <ContentCutIcon /> },
-            { key: "Barba", label: "Barba", icon: <GiBeard size={22} /> },
-            {
-              key: "Corte + Barba",
-              label: "Corte + Barba",
-              icon: (
-                <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                  <ContentCutIcon fontSize="small" /> <GiBeard size={20} />
-                </Box>
-              ),
-            },
-          ].map((s) => (
-            <Paper
-              key={s.key}
-              elevation={servicio === s.key ? 6 : 1}
-              onClick={() => {
-                setServicio(s.key);
-                setPeluqueroSeleccionado("");
-                setFecha("");
-                setHora("");
-              }}
-              sx={{
-                p: 2,
-                textAlign: "center",
-                cursor: "pointer",
-                backgroundColor: servicio === s.key ? "#f2a900" : "white",
-                color: servicio === s.key ? "black" : "inherit",
-                borderRadius: 2,
-                transition: "all 0.25s ease",
-                "&:hover": { backgroundColor: servicio === s.key ? "#f2a900" : "#f5f5f5" },
-              }}
-            >
-              {s.icon}
-              <Typography sx={{ mt: 1, fontWeight: "bold", textTransform: "capitalize" }}>
-                {s.label}
-              </Typography>
-            </Paper>
-          ))}
-        </Box>
+            }}
+          >
+            <CircularProgress sx={{color: "orange"}}/>
+          </Box>
+        )}
+        <DialogTitle sx={{ fontWeight: "bold" }}>📅 Sacar turno</DialogTitle>
 
-        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-          Seleccioná tu barbero:
-        </Typography>
-        <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(140px, 1fr))" gap={2}>
-          {peluqueros.map((p) => (
-            <Paper
-              key={p._id}
-              elevation={peluqueroSeleccionado === p._id ? 6 : 1}
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                e.stopPropagation();
-                if (!servicio) return;
-                setPeluqueroSeleccionado(p._id);
-                setFecha("");
-                setHora("");
-              }}
-              sx={{
-                p: 2,
-                textAlign: "center",
-                cursor: servicio ? "pointer" : "not-allowed",
-                backgroundColor:
-                  peluqueroSeleccionado === p._id ? "#f2a900" : "white",
-                color: servicio
-                  ? peluqueroSeleccionado === p._id
-                    ? "black"
-                    : "inherit"
-                  : "gray",
-                borderRadius: 2,
-                transition: "all 0.25s ease",
-                opacity: servicio ? 1 : 0.5,
-              }}
-            >
-              <BoyIcon sx={{ fontSize: 40 }} />
-              <Typography sx={{ mt: 1, fontWeight: "bold" }}>{p.nombre}</Typography>
-            </Paper>
-          ))}
-        </Box>
-
-        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-          Tus datos:
-        </Typography>
-        <Box display="flex" flexDirection="column" gap={2}>
-          <TextField
-            fullWidth
-            label="Nombre"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-          />
-          <TextField
-            fullWidth
-            label="Email"
-            value={mail}
-            onChange={(e) => setMail(e.target.value)}
-          />
-        </Box>
-
-        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-          Seleccioná la fecha:
-        </Typography>
-        <TextField
-          type="date"
-          fullWidth
-          value={fecha}
-          InputLabelProps={{ shrink: true }}
-          disabled={!peluqueroSeleccionado}
-          onChange={(e) => {
-            setFecha(e.target.value);
-            setHora("");
-          }}
-        />
-
-        <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-          Seleccioná un horario:
-        </Typography>
-        <ToggleButtonGroup
-          value={hora || null}
-          exclusive
-          onChange={(_, value) => setHora(value)}
-          sx={{ flexWrap: "wrap", gap: 1 }}
-        >
-          {horarios.length > 0 ? (
-            horarios.map((h) => (
-              <ToggleButton
-                key={h}
-                value={h}
-                disabled={!fecha}
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+            Seleccioná el servicio:
+          </Typography>
+          <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(120px, 1fr))" gap={2}>
+            {[ 
+              { key: "Corte", label: "Corte", icon: <ContentCutIcon /> },
+              { key: "Barba", label: "Barba", icon: <GiBeard size={22} /> },
+              {
+                key: "Corte + Barba",
+                label: "Corte + Barba",
+                icon: (
+                  <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
+                    <ContentCutIcon fontSize="small" /> <GiBeard size={20} />
+                  </Box>
+                ),
+              },
+            ].map((s) => (
+              <Paper
+                key={s.key}
+                elevation={servicio === s.key ? 6 : 1}
+                onClick={() => {
+                  setServicio(s.key);
+                  setPeluqueroSeleccionado("");
+                  setFecha(null);
+                  setHora("");
+                }}
                 sx={{
+                  p: 2,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  backgroundColor: servicio === s.key ? "#f2a900" : "white",
+                  color: servicio === s.key ? "black" : "inherit",
                   borderRadius: 2,
-                  border: "1px solid #ccc",
-                  textTransform: "none",
-                  px: 2,
-                  "&.Mui-selected": {
-                    backgroundColor: "#f2a900",
-                    color: "black",
-                    fontWeight: "bold",
-                  },
+                  transition: "all 0.25s ease",
+                  "&:hover": { backgroundColor: servicio === s.key ? "#f2a900" : "#f5f5f5" },
                 }}
               >
-                {h}
-              </ToggleButton>
-            ))
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No hay horarios disponibles
-            </Typography>
-          )}
-        </ToggleButtonGroup>
-      </DialogContent>
+                {s.icon}
+                <Typography sx={{ mt: 1, fontWeight: "bold", textTransform: "capitalize" }}>
+                  {s.label}
+                </Typography>
+              </Paper>
+            ))}
+          </Box>
 
-      <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" onClick={handleConfirm} disabled={!hora}>
-          Confirmar
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+            Seleccioná tu barbero:
+          </Typography>
+          <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(140px, 1fr))" gap={2}>
+            {peluqueros.map((p) => (
+              <Paper
+                key={p._id}
+                elevation={peluqueroSeleccionado === p._id ? 6 : 1}
+                onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                  e.stopPropagation();
+                  if (!servicio) return;
+                  setPeluqueroSeleccionado(p._id);
+                  setFecha(null);
+                  setHora("");
+                }}
+                sx={{
+                  p: 2,
+                  textAlign: "center",
+                  cursor: servicio ? "pointer" : "not-allowed",
+                  backgroundColor:
+                    peluqueroSeleccionado === p._id ? "#f2a900" : "white",
+                  color: servicio
+                    ? peluqueroSeleccionado === p._id
+                      ? "black"
+                      : "inherit"
+                    : "gray",
+                  borderRadius: 2,
+                  transition: "all 0.25s ease",
+                  opacity: servicio ? 1 : 0.5,
+                }}
+              >
+                <BoyIcon sx={{ fontSize: 40 }} />
+                <Typography sx={{ mt: 1, fontWeight: "bold" }}>{p.nombre}</Typography>
+              </Paper>
+            ))}
+          </Box>
+
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+            Tus datos:
+          </Typography>
+          {isAuthenticated && user ? (
+            <Box display="flex" flexDirection="column" gap={2}>
+              <TextField
+                fullWidth
+                label="Nombre"
+                value={user.name}
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                value={user.email}
+              />
+              <Typography variant="caption" color="text.secondary">
+                Tus datos se tomarán de tu cuenta de Google.
+              </Typography>
+            </Box>
+          ) : (
+            <Box display="flex" flexDirection="column" gap={2}>
+              <TextField
+                fullWidth
+                label="Nombre"
+                value=""
+                disabled
+                helperText="Inicia sesión con Google para reservar un turno."
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                value=""
+                disabled
+              />
+            </Box>
+          )}
+
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+            Seleccioná la fecha:
+          </Typography>
+          <DatePicker
+            label="Fecha"
+            value={fecha}
+            onChange={(newDate) => {
+              setFecha(newDate);
+              setHora("");
+            }}
+            shouldDisableDate={shouldDisableDate}
+            disablePast
+            disabled={!peluqueroSeleccionado}
+          />
+
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+            Seleccioná un horario:
+          </Typography>
+          <ToggleButtonGroup
+            value={hora || null}
+            exclusive
+            onChange={(_, value) => setHora(value)}
+            sx={{ flexWrap: "wrap", gap: 1 }}
+          >
+            {horarios.length > 0 ? (
+              horarios.map((h) => (
+                <ToggleButton
+                  key={h}
+                  value={h}
+                  disabled={!fecha}
+                  sx={{
+                    borderRadius: 2,
+                    border: "1px solid #ccc",
+                    textTransform: "none",
+                    px: 2,
+                    "&.Mui-selected": {
+                      backgroundColor: "#f2a900",
+                      color: "black",
+                      fontWeight: "bold",
+                    },
+                  }}
+                >
+                  {h}
+                </ToggleButton>
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No hay horarios disponibles
+              </Typography>
+            )}
+          </ToggleButtonGroup>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button variant="contained" onClick={handleConfirm} disabled={!hora}>
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </LocalizationProvider>
   );
 }

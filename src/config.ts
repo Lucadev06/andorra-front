@@ -1,1 +1,2 @@
+export const GOOGLE_CLIENT_ID = '862922888401-mttk5nr84a2amevv1lhr0qu8ep33tkt9.apps.googleusercontent.com'; // Reemplaza con tu Client ID de Google
 export const API_URL = "https://andorra-back-1.onrender.com/api";

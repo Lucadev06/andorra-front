@@ -1,19 +1,21 @@
-
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  TextField,
-  Box,
   List,
   ListItem,
   ListItemText,
   Typography,
   Paper,
+  CircularProgress,
+  Tabs,
+  Tab,
+  Box,
 } from "@mui/material";
+import { useAuth } from "../context/AuthContext";
 
 interface Turno {
   _id: string;
@@ -31,19 +33,23 @@ interface MisTurnosDialogProps {
 }
 
 export default function MisTurnosDialog({ open, onClose }: MisTurnosDialogProps) {
-  const [email, setEmail] = useState("");
+  const { user, isAuthenticated } = useAuth();
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [searched, setSearched] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [tab, setTab] = useState(0);
 
   const API_URL = "https://andorra-back-1.onrender.com/api";
 
-  const handleSearch = async () => {
-    if (!email) {
-      alert("Por favor, ingresa tu email.");
+  const handleSearch = useCallback(async () => {
+    if (!isAuthenticated || !user?.email) {
+      setTurnos([]);
+      setSearched(true);
       return;
     }
+    setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/turnos/email/${email}`);
+      const response = await fetch(`${API_URL}/turnos/email/${user.email}`);
       if (response.ok) {
         const data = await response.json();
         setTurnos(data.data);
@@ -55,49 +61,94 @@ export default function MisTurnosDialog({ open, onClose }: MisTurnosDialogProps)
       setTurnos([]);
     }
     setSearched(true);
-  };
+    setIsLoading(false);
+  }, [isAuthenticated, user?.email]);
+
+  useEffect(() => {
+    if (open && isAuthenticated && user?.email) {
+      void handleSearch();
+    } else if (open && !isAuthenticated) {
+      setSearched(true);
+      setTurnos([]);
+    }
+  }, [open, isAuthenticated, user?.email, handleSearch]);
 
   const handleClose = () => {
-    setEmail("");
     setTurnos([]);
     setSearched(false);
+    setTab(0);
     onClose();
   };
+
+  // Separar vigentes e historial
+  const hoy = new Date();
+  const turnosVigentes = turnos.filter(t => new Date(t.fecha) >= hoy);
+  const turnosHistorial = turnos.filter(t => new Date(t.fecha) < hoy);
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle>Mis Turnos</DialogTitle>
       <DialogContent>
-        <Box sx={{ display: "flex", gap: 2, mt: 2, mb: 4 }}>
-          <TextField
-            label="Ingresá tu email"
-            variant="outlined"
-            fullWidth
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Button variant="contained" onClick={handleSearch}>
-            Buscar
-          </Button>
-        </Box>
+        {!isAuthenticated ? (
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 2, mb: 4 }}>
+            Inicia sesión con Google para ver tus turnos.
+          </Typography>
+        ) : (
+          <>
+            {isLoading && <CircularProgress sx={{ display: "block", margin: "20px auto" }} />}
+            {searched && turnos.length > 0 && (
+              <>
+                <Tabs value={tab} onChange={(_, newValue) => setTab(newValue)} centered>
+                  <Tab label="Vigentes" />
+                  <Tab label="Historial" />
+                </Tabs>
 
-        {searched && turnos.length > 0 && (
-          <Paper elevation={3}>
-            <List>
-              {turnos.map((turno) => (
-                <ListItem key={turno._id} divider>
-                  <ListItemText
-                    primary={`${new Date(turno.fecha).toLocaleDateString()} - ${turno.hora}`}
-                    secondary={`Barbero: ${turno.peluquero.nombre} - Servicio: ${turno.servicio}`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-        )}
+                <Box sx={{ mt: 2 }}>
+                  {tab === 0 && (
+                    <Paper elevation={3}>
+                      <List>
+                        {turnosVigentes.length > 0 ? (
+                          turnosVigentes.map((turno) => (
+                            <ListItem key={turno._id} divider>
+                              <ListItemText
+                                primary={`${new Date(turno.fecha).toLocaleDateString()} - ${turno.hora}`}
+                                secondary={`Barbero: ${turno.peluquero.nombre} - Servicio: ${turno.servicio}`}
+                              />
+                            </ListItem>
+                          ))
+                        ) : (
+                          <Typography sx={{ p: 2 }}>No tienes turnos vigentes.</Typography>
+                        )}
+                      </List>
+                    </Paper>
+                  )}
 
-        {searched && turnos.length === 0 && (
-          <Typography>No se encontraron turnos para el email ingresado.</Typography>
+                  {tab === 1 && (
+                    <Paper elevation={3}>
+                      <List>
+                        {turnosHistorial.length > 0 ? (
+                          turnosHistorial.map((turno) => (
+                            <ListItem key={turno._id} divider>
+                              <ListItemText
+                                primary={`${new Date(turno.fecha).toLocaleDateString()} - ${turno.hora}`}
+                                secondary={`Barbero: ${turno.peluquero.nombre} - Servicio: ${turno.servicio}`}
+                              />
+                            </ListItem>
+                          ))
+                        ) : (
+                          <Typography sx={{ p: 2 }}>No tienes turnos en historial.</Typography>
+                        )}
+                      </List>
+                    </Paper>
+                  )}
+                </Box>
+              </>
+            )}
+
+            {searched && turnos.length === 0 && !isLoading && (
+              <Typography sx={{ mt: 2 }}>No se encontraron turnos para tu email.</Typography>
+            )}
+          </>
         )}
       </DialogContent>
       <DialogActions>
