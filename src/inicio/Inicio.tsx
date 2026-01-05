@@ -92,7 +92,7 @@ export default function Inicio() {
           <Box sx={mainContainerStyles}>
             <Box
               component="img"
-              src="/logo.png"
+              src="/logo-final.png"
               alt="Logo Andorra Barber Club"
               sx={logoStyles}
             />
@@ -140,7 +140,7 @@ export default function Inicio() {
           <Box sx={mainContainerStyles}>
             <Box
               component="img"
-              src="/logo.png"
+              src="/logo-final.png"
               alt="Logo Andorra Barber Club"
               sx={logoStyles}
             />
