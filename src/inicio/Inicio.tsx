@@ -126,7 +126,7 @@ export default function Inicio() {
             <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
               <Button
                 component="a"
-                href="https://www.instagram.com/andorra.barberclub/?hl=es"
+                href="https://www.instagram.com/estudioparra_h/"
                 target="_blank"
                 sx={{ color: "white" }}
               >
