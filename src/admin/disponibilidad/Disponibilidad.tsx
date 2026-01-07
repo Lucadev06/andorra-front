@@ -4,14 +4,12 @@ import {
   Typography, 
   Button, 
   Paper, 
-  Grid, 
   Chip, 
   IconButton,
   Card,
   CardContent,
   Divider,
-  useTheme,
-  useMediaQuery
+  useTheme
 } from '@mui/material';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -78,7 +76,6 @@ const isDomingo = (date: Date) => {
 
 const Disponibilidad = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const context = useContext(DisponibilidadContext);
   const [fecha, setFecha] = useState<Date | null>(new Date());
 
@@ -210,9 +207,9 @@ const Disponibilidad = () => {
         Gestionar Disponibilidad
       </Typography>
 
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1.4fr' }, gap: 3 }}>
         {/* Calendario */}
-        <Grid item xs={12} md={5}>
+        <Box>
           <Card elevation={2}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -250,11 +247,11 @@ const Disponibilidad = () => {
               </Button>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* Horarios del día seleccionado */}
         {fecha && !isNaN(fecha.getTime()) && (
-          <Grid item xs={12} md={7}>
+          <Box>
             <Card elevation={2}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -264,11 +261,11 @@ const Disponibilidad = () => {
                   </Typography>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
-                <Grid container spacing={1.5}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   {todosLosHorarios.map(horario => {
                     const isBlocked = blockedHours.includes(horario);
                     return (
-                      <Grid item xs={12} sm={6} md={4} key={horario}>
+                      <Box key={horario}>
                         <Paper
                           elevation={isBlocked || isDayFullyBlocked ? 3 : 1}
                           sx={{
@@ -367,17 +364,17 @@ const Disponibilidad = () => {
                             </Button>
                           )}
                         </Paper>
-                      </Grid>
+                      </Box>
                     );
                   })}
-                </Grid>
+                </Box>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         )}
 
         {/* Días bloqueados */}
-        <Grid item xs={12}>
+        <Box sx={{ gridColumn: '1 / -1' }}>
           <Card elevation={2}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -500,7 +497,7 @@ const Disponibilidad = () => {
                                     <Chip
                                       key={`${dia.fecha}-${horario}-${index}`}
                                       label={horario}
-                                      size="large"
+                                      size="medium"
                                       color="warning"
                                       variant="filled"
                                       icon={<AccessTimeIcon sx={{ fontSize: '1.1rem' }} />}
@@ -531,8 +528,8 @@ const Disponibilidad = () => {
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       <style>{`
         .custom-calendar {

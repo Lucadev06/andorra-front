@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useState, useEffect, type ReactNode } from 'react';
 
 const API_URL = 'https://andorra-back-1.onrender.com/api/dias-no-disponibles';
 
@@ -20,7 +20,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
   const [diasNoDisponibles, setDiasNoDisponibles] = useState<DiaNoDisponible[]>([]);
 
   // Función helper para normalizar fecha a string YYYY-MM-DD
-  const normalizeFecha = (fecha: any): string => {
+  const normalizeFecha = (fecha: string | Date | unknown): string => {
     if (!fecha) return '';
     if (typeof fecha === 'string') {
       // Si ya es string, verificar formato
@@ -30,11 +30,13 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
       return fecha;
     }
     // Si es Date object
-    const date = new Date(fecha);
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    if (fecha instanceof Date) {
+      const year = fecha.getUTCFullYear();
+      const month = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return '';
   };
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
         const res = await fetch(API_URL);
         const data = await res.json();
         // Normalizar las fechas a formato YYYY-MM-DD
-        const normalized = data.map((dia: any) => ({
+        const normalized = data.map((dia: { _id: string; fecha: string | Date; horarios?: string[] }) => ({
           ...dia,
           fecha: normalizeFecha(dia.fecha),
           horarios: Array.isArray(dia.horarios) ? dia.horarios : []
@@ -67,7 +69,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
         // Refrescar desde el servidor para obtener datos actualizados
         const refreshRes = await fetch(API_URL);
         const data = await refreshRes.json();
-        const normalized = data.map((dia: any) => ({
+        const normalized = data.map((dia: { _id: string; fecha: string | Date; horarios?: string[] }) => ({
           ...dia,
           fecha: normalizeFecha(dia.fecha),
           horarios: Array.isArray(dia.horarios) ? dia.horarios : []
@@ -81,7 +83,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
 
   const deleteDiaNoDisponible = async (fecha: string, horario?: string) => {
     try {
-      const res = await fetch(API_URL, {
+      await fetch(API_URL, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fecha, horario }),
@@ -94,7 +96,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
       const refreshRes = await fetch(API_URL);
       if (refreshRes.ok) {
         const data = await refreshRes.json();
-        const normalized = data.map((dia: any) => ({
+        const normalized = data.map((dia: { _id: string; fecha: string | Date; horarios?: string[] }) => ({
           ...dia,
           fecha: normalizeFecha(dia.fecha),
           horarios: Array.isArray(dia.horarios) ? dia.horarios : []
@@ -108,7 +110,7 @@ export const DisponibilidadProvider = ({ children }: { children: ReactNode }) =>
         const refreshRes = await fetch(API_URL);
         if (refreshRes.ok) {
           const data = await refreshRes.json();
-          const normalized = data.map((dia: any) => ({
+          const normalized = data.map((dia: { _id: string; fecha: string | Date; horarios?: string[] }) => ({
             ...dia,
             fecha: normalizeFecha(dia.fecha),
             horarios: Array.isArray(dia.horarios) ? dia.horarios : []

@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from "react";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
-import BoyIcon from "@mui/icons-material/Boy";
 import { GiBeard } from "react-icons/gi";
 import { TurnosContext } from "../context/TurnosContextTypes";
 import { useAuth } from '../context/AuthContext';
@@ -17,8 +16,7 @@ import {
   Typography,
   Box,
   Paper,
-  TextField,
-  CircularProgress
+  TextField
 } from "@mui/material";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';

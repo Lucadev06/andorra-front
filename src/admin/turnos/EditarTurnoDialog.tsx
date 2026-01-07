@@ -8,7 +8,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
-  Box,
 } from "@mui/material";
 import { useEffect, useState, useContext } from "react";
 import { type Turno } from "../../context/TurnosContextTypes";

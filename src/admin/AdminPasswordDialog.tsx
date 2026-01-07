@@ -34,7 +34,7 @@ export default function AdminPasswordDialog({
     if (password === ADMIN_PASSWORD) {
       // Guardar sesión de admin en localStorage
       localStorage.setItem("adminAuthenticated", "true");
-      localStorage.setItem("adminSessionExpiry", String(Date.now() + 8 * 60 * 60 * 1000)); // 8 horas
+      localStorage.setItem("adminSessionExpiry", String(Date.now() + 1 * 60 * 60 * 1000)); // 1 hora
       onSuccess();
       setPassword("");
     } else {

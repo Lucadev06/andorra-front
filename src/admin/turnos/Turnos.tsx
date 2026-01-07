@@ -16,10 +16,8 @@ import {
   TableContainer,
   TextField,
   MenuItem,
-  Grid,
   Chip,
   Button,
-  InputAdornment,
 } from "@mui/material";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -173,8 +171,8 @@ function Turnos() {
                 </Button>
               )}
             </Box>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <Box>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                   <DatePicker
                     label="Filtrar por fecha"
@@ -188,8 +186,8 @@ function Turnos() {
                     }}
                   />
                 </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
+              </Box>
+              <Box>
                 <TextField
                   select
                   label="Filtrar por horario"
@@ -213,8 +211,8 @@ function Turnos() {
                     </MenuItem>
                   ))}
                 </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
+              </Box>
+              <Box>
                 <TextField
                   select
                   label="Filtrar por servicio"
@@ -238,8 +236,8 @@ function Turnos() {
                     </MenuItem>
                   ))}
                 </TextField>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Paper>
           {isMobile ? (
             // Vista móvil: cards

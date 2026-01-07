@@ -13,6 +13,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import PeopleIcon from "@mui/icons-material/People";
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import LogoutIcon from '@mui/icons-material/Logout';
 import Turnos from "./turnos/Turnos";
 import Disponibilidad from "./disponibilidad/Disponibilidad";
 import AdminPasswordDialog from "./AdminPasswordDialog";
@@ -56,6 +57,13 @@ function Admin() {
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
     setShowPasswordDialog(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminAuthenticated");
+    localStorage.removeItem("adminSessionExpiry");
+    setIsAuthenticated(false);
+    setShowPasswordDialog(true);
   };
 
   const handleDrawerToggle = () => {
@@ -119,6 +127,21 @@ function Admin() {
           onClick={() => handleSeccionChange("disponibilidad")}
         >
           Disponibilidad
+        </Button>
+        <Button
+          startIcon={<LogoutIcon />}
+          sx={{
+            ...buttonStyles,
+            mt: 'auto',
+            mb: 2,
+            color: 'error.main',
+            "&:hover": {
+              backgroundColor: "rgba(255, 0, 0, 0.1)",
+            },
+          }}
+          onClick={handleLogout}
+        >
+          Cerrar sesión
         </Button>
       </Box>
     </Box>
