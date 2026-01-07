@@ -18,7 +18,7 @@ interface AdminPasswordDialogProps {
 }
 
 // Contraseña de admin (cambiar aquí si es necesario)
-const ADMIN_PASSWORD = "1234";
+const ADMIN_PASSWORD = "Martelli121410";
 
 export default function AdminPasswordDialog({
   open,

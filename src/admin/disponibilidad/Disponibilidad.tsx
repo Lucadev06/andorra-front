@@ -397,6 +397,11 @@ const Disponibilidad = () => {
               ) : (
                 <Box>
                   {diasNoDisponibles
+                    .filter(dia => {
+                      // Filtrar días que tengan al menos un horario bloqueado
+                      const horariosArray = Array.isArray(dia.horarios) ? dia.horarios : [];
+                      return horariosArray.length > 0;
+                    })
                     .sort((a, b) => {
                       const fechaA = parseDateString(a.fecha);
                       const fechaB = parseDateString(b.fecha);
