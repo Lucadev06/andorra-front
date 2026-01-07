@@ -4,12 +4,15 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
   Alert,
+  Box,
+  Paper,
 } from "@mui/material";
+import ContentCutIcon from "@mui/icons-material/ContentCut";
+import { GiBeard } from "react-icons/gi";
 import { useEffect, useState, useContext } from "react";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -264,12 +267,47 @@ export default function EditarTurnoClienteDialog({
             <Alert severity="error">{error}</Alert>
           )}
 
-          <TextField
-            label="Servicio"
-            value={servicio}
-            onChange={(e) => setServicio(e.target.value)}
-            fullWidth
-          />
+          <Typography variant="subtitle1" sx={{ fontWeight: "bold", mt: 1 }}>
+            Seleccioná el servicio:
+          </Typography>
+          <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(120px, 1fr))" gap={2}>
+            {[ 
+              { key: "Corte", label: "Corte", icon: <ContentCutIcon /> },
+              { key: "Barba", label: "Barba", icon: <GiBeard size={22} /> },
+              {
+                key: "Corte + Barba",
+                label: "Corte + Barba",
+                icon: (
+                  <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
+                    <ContentCutIcon fontSize="small" /> <GiBeard size={20} />
+                  </Box>
+                ),
+              },
+            ].map((s) => (
+              <Paper
+                key={s.key}
+                elevation={servicio === s.key ? 6 : 1}
+                onClick={() => {
+                  setServicio(s.key);
+                }}
+                sx={{
+                  p: 2,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  backgroundColor: servicio === s.key ? "#f2a900" : "white",
+                  color: servicio === s.key ? "black" : "inherit",
+                  borderRadius: 2,
+                  transition: "all 0.25s ease",
+                  "&:hover": { backgroundColor: servicio === s.key ? "#f2a900" : "#f5f5f5" },
+                }}
+              >
+                {s.icon}
+                <Typography sx={{ mt: 1, fontWeight: "bold", textTransform: "capitalize" }}>
+                  {s.label}
+                </Typography>
+              </Paper>
+            ))}
+          </Box>
 
           <Typography variant="subtitle1" sx={{ fontWeight: "bold", mt: 1 }}>
             Seleccioná la fecha:
