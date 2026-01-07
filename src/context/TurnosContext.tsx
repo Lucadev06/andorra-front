@@ -69,8 +69,26 @@ export const TurnosProvider = ({ children }: TurnosProviderProps) => {
     }
   };
 
+  const deleteTurno = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/turnos/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        fetchTurnos(); // Re-fetch all turnos
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete turno");
+      }
+    } catch (error) {
+      console.error("Error deleting turno:", error);
+      throw error;
+    }
+  };
+
   return (
-    <TurnosContext.Provider value={{ turnos, addTurno, updateTurno }}>
+    <TurnosContext.Provider value={{ turnos, addTurno, updateTurno, deleteTurno }}>
       {children}
     </TurnosContext.Provider>
   );

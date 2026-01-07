@@ -1,14 +1,8 @@
 import { createContext } from "react";
 
 // Interfaces
-export interface Peluquero {
-  _id: string;
-  nombre: string;
-}
-
 export interface Turno {
   _id:string;
-  peluquero: string | Peluquero;
   cliente: string;
   mail: string;
   fecha: string;
@@ -21,6 +15,7 @@ export interface TurnosContextType {
   turnos: Turno[];
   addTurno: (newTurno: Omit<Turno, "_id">) => Promise<void>;
   updateTurno: (updatedTurno: Turno) => Promise<void>;
+  deleteTurno: (id: string) => Promise<void>;
 }
 
 export const TurnosContext = createContext<TurnosContextType | undefined>(

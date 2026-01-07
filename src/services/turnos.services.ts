@@ -2,7 +2,6 @@ import { API_URL } from "../config";
 
 export interface Turno {
   _id: string;
-  peluquero: string | { _id: string; nombre: string };
   cliente: string;
   fecha: string;
   hora: string;

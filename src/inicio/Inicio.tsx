@@ -9,6 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import { useGoogleLogin } from "@react-oauth/google";
 import GoogleIcon from '@mui/icons-material/Google';
 import { useEffect } from "react";
+import { parseTurnoDate } from "../utils/dateUtils";
 interface Turno {
   _id: string;
   fecha: string;
@@ -67,7 +68,13 @@ export default function Inicio() {
         if (response.ok) {
           const data = await response.json();
           const hoy = new Date();
-          const hayVigentes = data.data.some((t: Turno) => new Date(t.fecha) >= hoy);
+          hoy.setHours(0, 0, 0, 0);
+          const hayVigentes = data.data.some((t: Turno) => {
+            const fechaTurno = parseTurnoDate(t.fecha);
+            if (!fechaTurno) return false;
+            fechaTurno.setHours(0, 0, 0, 0);
+            return fechaTurno >= hoy;
+          });
           setHasTurnosVigentes(hayVigentes);
         } else {
           setHasTurnosVigentes(false);
@@ -176,6 +183,28 @@ export default function Inicio() {
       <MisTurnosDialog
         open={openMisTurnos}
         onClose={() => setOpenMisTurnos(false)}
+        onTurnoCambiado={async () => {
+          // Recargar turnos vigentes cuando se cancela o edita un turno
+          if (isAuthenticated && user?.email) {
+            try {
+              const response = await fetch(`https://andorra-back-1.onrender.com/api/turnos/email/${user.email}`);
+              if (response.ok) {
+                const data = await response.json();
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                const hayVigentes = data.data.some((t: Turno) => {
+                  const fechaTurno = parseTurnoDate(t.fecha);
+                  if (!fechaTurno) return false;
+                  fechaTurno.setHours(0, 0, 0, 0);
+                  return fechaTurno >= hoy;
+                });
+                setHasTurnosVigentes(hayVigentes);
+              }
+            } catch (err) {
+              console.error("Error al obtener turnos", err);
+            }
+          }
+        }}
       />
     </>
   );

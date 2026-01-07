@@ -3,11 +3,17 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { TurnosProvider } from './context/TurnosContext.tsx'
+import { AuthProvider } from './context/AuthContext.tsx'
+import { DisponibilidadProvider } from './context/DisponibilidadContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <TurnosProvider>
-      <App />
-    </TurnosProvider>
+    <AuthProvider>
+      <DisponibilidadProvider>
+        <TurnosProvider>
+          <App />
+        </TurnosProvider>
+      </DisponibilidadProvider>
+    </AuthProvider>
   </StrictMode>,
 )

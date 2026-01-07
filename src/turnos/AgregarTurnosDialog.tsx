@@ -4,6 +4,8 @@ import BoyIcon from "@mui/icons-material/Boy";
 import { GiBeard } from "react-icons/gi";
 import { TurnosContext } from "../context/TurnosContextTypes";
 import { useAuth } from '../context/AuthContext';
+import { DisponibilidadContext } from '../context/DisponibilidadContext';
+import { parseTurnoDate } from "../utils/dateUtils";
 import {
   Dialog,
   DialogTitle,
@@ -26,12 +28,6 @@ import { es } from 'date-fns/locale';
 interface AgregarTurnosDialogProps {
   open: boolean;
   onClose: () => void;
-}
-
-interface Peluquero {
-  _id: string;
-  nombre: string;
-  servicios: string[];
 }
 
 // Helper function to generate time slots
@@ -70,72 +66,96 @@ const isFeriado = (date: Date) => {
   return feriados.includes(dateString);
 };
 
-const shouldDisableDate = (date: Date) => {
-  return isDomingo(date) || isFeriado(date);
-};
-
 export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDialogProps) {
   // 1. Hooks
   const context = useContext(TurnosContext);
+  const disponibilidadContext = useContext(DisponibilidadContext);
   const { user, isAuthenticated } = useAuth();
-  const [peluqueros, setPeluqueros] = useState<Peluquero[]>([]);
-  const [peluqueroSeleccionado, setPeluqueroSeleccionado] = useState<string>("");
   const [servicio, setServicio] = useState<string>("");
   const [fecha, setFecha] = useState<Date | null>(null);
   const [horarios, setHorarios] = useState<string[]>([]);
   const [hora, setHora] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const API_URL = "https://andorra-back-1.onrender.com/api";
-
-  // Effect for fetching barbers
-  useEffect(() => {
-    const fetchPeluqueros = async () => {
-      if (open) {
-        setIsLoading(true);
-        try {
-
-          const res = await fetch(`${API_URL}/peluqueros`);
-          const data = (await res.json()) as Peluquero[];
-          setPeluqueros(data);
-        } catch (err) {
-          console.error("Error obteniendo peluqueros:", err);
-        }
-      }
-    };
-    void fetchPeluqueros();
-    setIsLoading(false);
-  }, [open]);
+  const shouldDisableDate = (date: Date) => {
+    // Verificar si es día anterior
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(date);
+    fechaSeleccionada.setHours(0, 0, 0, 0);
+    if (fechaSeleccionada < hoy) {
+      return true; // Días anteriores deshabilitados
+    }
+    // Primero verificar si es domingo - siempre deshabilitado
+    if (isDomingo(date)) {
+      return true;
+    }
+    // Verificar si es feriado
+    if (isFeriado(date)) {
+      return true;
+    }
+    // Verificar si el día está completamente bloqueado
+    const dateString = date.toISOString().split("T")[0];
+    const diaNoDisponible = disponibilidadContext?.diasNoDisponibles.find(d => {
+      const diaFecha = typeof d.fecha === 'string' ? d.fecha : new Date(d.fecha).toISOString().split("T")[0];
+      return diaFecha === dateString || d.fecha.startsWith(dateString);
+    });
+    if (diaNoDisponible && (!diaNoDisponible.horarios || diaNoDisponible.horarios.length === 0)) {
+      return true; // Día completo bloqueado
+    }
+    return false;
+  };
 
   // Effect for calculating available slots
   useEffect(() => {
-    if (context && peluqueroSeleccionado && fecha) {
+    if (context && fecha && disponibilidadContext) {
       const { turnos } = context;
+      const { diasNoDisponibles } = disponibilidadContext;
       const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
       const fechaISO = fecha.toISOString().split("T")[0];
       const turnosOcupados = turnos
         .filter(
-          (t) =>
-            (typeof t.peluquero === 'string' ? t.peluquero : t.peluquero._id) === peluqueroSeleccionado &&
-            new Date(t.fecha).toISOString().split("T")[0] === fechaISO
+          (t) => {
+            const fechaTurno = parseTurnoDate(t.fecha);
+            if (!fechaTurno) return false;
+            const fechaTurnoISO = fechaTurno.toISOString().split("T")[0];
+            return fechaTurnoISO === fechaISO;
+          }
         )
         .map((t) => t.hora);
+      
+      const diaNoDisponible = diasNoDisponibles.find(d => d.fecha.startsWith(fechaISO));
+      const horariosBloqueados = diaNoDisponible ? diaNoDisponible.horarios : [];
+
+      // Si es el día de hoy, filtrar horarios pasados
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fechaSeleccionada = new Date(fecha);
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+      const esHoy = fechaSeleccionada.getTime() === hoy.getTime();
+      
+      const horaActual = new Date();
+      const horaActualStr = `${String(horaActual.getHours()).padStart(2, "0")}:${String(horaActual.getMinutes()).padStart(2, "0")}`;
 
       const horariosLibres = todosLosHorarios.filter(
-        (h) => !turnosOcupados.includes(h)
+        (h) => {
+          // Si es hoy, excluir horarios pasados
+          if (esHoy && h <= horaActualStr) {
+            return false;
+          }
+          return !turnosOcupados.includes(h) && !horariosBloqueados.includes(h);
+        }
       );
       setHorarios(horariosLibres);
     } else {
       setHorarios([]);
     }
-  }, [peluqueroSeleccionado, fecha, context]); // Depend on context object
+  }, [fecha, context, disponibilidadContext]); // Depend on context object
 
   // Effect for cleaning up the dialog state
   useEffect(() => {
     if (!open) {
       setFecha(null);
       setHora("");
-      setPeluqueroSeleccionado("");
       setServicio("");
       setHorarios([]);
     }
@@ -158,8 +178,14 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
     if (!context) {
       return;
     }
-    if (!servicio || !peluqueroSeleccionado || !fecha || !hora) {
-      alert("Completa todos los campos: servicio, barbero, fecha y horario.");
+    if (!servicio || !fecha || !hora) {
+      alert("Completa todos los campos: servicio, fecha y horario.");
+      return;
+    }
+
+    // Validación adicional: verificar que no sea domingo
+    if (fecha && isDomingo(fecha)) {
+      alert("❌ Los domingos no están disponibles para turnos.");
       return;
     }
 
@@ -167,7 +193,6 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       await addTurno({
         cliente: user.name,
         mail: user.email,
-        peluquero: peluqueroSeleccionado,
         fecha: fecha.toISOString().split("T")[0],
         hora,
         servicio,
@@ -188,25 +213,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
-        {isLoading && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              backgroundColor: "rgba(255, 255, 255, 0.7)",
-              zIndex: 10,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
 
-            }}
-          >
-            <CircularProgress sx={{color: "orange"}}/>
-          </Box>
-        )}
         <DialogTitle sx={{ fontWeight: "bold" }}>📅 Sacar turno</DialogTitle>
 
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
@@ -232,9 +239,6 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
                 elevation={servicio === s.key ? 6 : 1}
                 onClick={() => {
                   setServicio(s.key);
-                  setPeluqueroSeleccionado("");
-                  setFecha(null);
-                  setHora("");
                 }}
                 sx={{
                   p: 2,
@@ -255,42 +259,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
             ))}
           </Box>
 
-          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-            Seleccioná tu barbero:
-          </Typography>
-          <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(140px, 1fr))" gap={2}>
-            {peluqueros.map((p) => (
-              <Paper
-                key={p._id}
-                elevation={peluqueroSeleccionado === p._id ? 6 : 1}
-                onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                  e.stopPropagation();
-                  if (!servicio) return;
-                  setPeluqueroSeleccionado(p._id);
-                  setFecha(null);
-                  setHora("");
-                }}
-                sx={{
-                  p: 2,
-                  textAlign: "center",
-                  cursor: servicio ? "pointer" : "not-allowed",
-                  backgroundColor:
-                    peluqueroSeleccionado === p._id ? "#f2a900" : "white",
-                  color: servicio
-                    ? peluqueroSeleccionado === p._id
-                      ? "black"
-                      : "inherit"
-                    : "gray",
-                  borderRadius: 2,
-                  transition: "all 0.25s ease",
-                  opacity: servicio ? 1 : 0.5,
-                }}
-              >
-                <BoyIcon sx={{ fontSize: 40 }} />
-                <Typography sx={{ mt: 1, fontWeight: "bold" }}>{p.nombre}</Typography>
-              </Paper>
-            ))}
-          </Box>
+
 
           <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
             Tus datos:
@@ -336,12 +305,22 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
             label="Fecha"
             value={fecha}
             onChange={(newDate) => {
+              // Validar que no sea domingo antes de establecer la fecha
+              if (newDate && isDomingo(newDate)) {
+                alert("Los domingos no están disponibles para turnos.");
+                return;
+              }
               setFecha(newDate);
               setHora("");
             }}
             shouldDisableDate={shouldDisableDate}
             disablePast
-            disabled={!peluqueroSeleccionado}
+            disabled={!servicio}
+            slotProps={{
+              textField: {
+                helperText: "Los domingos no están disponibles"
+              }
+            }}
           />
 
           <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>

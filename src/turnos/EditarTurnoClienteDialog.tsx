@@ -9,16 +9,16 @@ import {
   ToggleButtonGroup,
   Typography,
   Box,
+  Alert,
 } from "@mui/material";
 import { useEffect, useState, useContext } from "react";
-import { type Turno } from "../../context/TurnosContextTypes";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { es } from 'date-fns/locale';
-import { TurnosContext } from "../../context/TurnosContextTypes";
-import { DisponibilidadContext } from "../../context/DisponibilidadContext";
-import { parseTurnoDate } from "../../utils/dateUtils";
+import { TurnosContext } from "../context/TurnosContextTypes";
+import { DisponibilidadContext } from "../context/DisponibilidadContext";
+import { parseTurnoDate } from "../utils/dateUtils";
 
 // Helper function to generate time slots
 const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
@@ -45,45 +45,50 @@ const isDomingo = (date: Date) => {
   return date.getDay() === 0; // 0 es Domingo
 };
 
-interface EditarTurnoDialogProps {
+interface Turno {
+  _id: string;
+  fecha: string;
+  hora: string;
+  cliente: string;
+  mail: string;
+  servicio?: string;
+}
+
+interface EditarTurnoClienteDialogProps {
   open: boolean;
   onClose: () => void;
   turno: Turno;
-  onUpdated: (turnoEditado: Turno) => void;
+  onUpdated: () => void;
 }
 
-export default function EditarTurnoDialog({
+const API_URL = "https://andorra-back-1.onrender.com/api";
+
+export default function EditarTurnoClienteDialog({
   open,
   onClose,
   turno,
   onUpdated,
-}: EditarTurnoDialogProps) {
+}: EditarTurnoClienteDialogProps) {
   const context = useContext(TurnosContext);
   const disponibilidadContext = useContext(DisponibilidadContext);
-  const [cliente, setCliente] = useState("");
-  const [mail, setMail] = useState("");
+  const [servicio, setServicio] = useState("");
   const [fecha, setFecha] = useState<Date | null>(null);
   const [hora, setHora] = useState("");
-  const [servicio, setServicio] = useState("");
   const [horarios, setHorarios] = useState<string[]>([]);
-  const [initialTurno, setInitialTurno] = useState<Turno | null>(null);
-  const [hasChanged, setHasChanged] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (turno) {
-      setInitialTurno(turno);
-      setCliente(turno.cliente || "");
-      setMail(turno.mail || "");
-      // Convertir string de fecha a Date object
+      setServicio(turno.servicio || "");
       const fechaStr = turno.fecha ? turno.fecha.substring(0, 10) : "";
       setFecha(fechaStr ? new Date(fechaStr + 'T00:00:00') : null);
       setHora(turno.hora || "");
-      setServicio(turno.servicio || "");
-      setHasChanged(false);
+      setError("");
     }
   }, [turno]);
 
-  // Effect for calculating available slots (igual que en AgregarTurnosDialog)
+  // Effect for calculating available slots
   useEffect(() => {
     if (context && fecha && disponibilidadContext) {
       const { turnos } = context;
@@ -91,7 +96,7 @@ export default function EditarTurnoDialog({
       const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
       const fechaISO = fecha.toISOString().split("T")[0];
       
-      // Obtener turnos ocupados en esa fecha, excluyendo el turno actual que se está editando
+      // Obtener turnos ocupados en esa fecha, excluyendo el turno actual
       const turnosOcupados = turnos
         .filter(
           (t) => {
@@ -110,12 +115,27 @@ export default function EditarTurnoDialog({
       });
       const horariosBloqueados = diaNoDisponible ? (Array.isArray(diaNoDisponible.horarios) ? diaNoDisponible.horarios : []) : [];
 
+      // Si es el día de hoy, filtrar horarios pasados
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fechaSeleccionada = new Date(fecha);
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+      const esHoy = fechaSeleccionada.getTime() === hoy.getTime();
+      
+      const horaActual = new Date();
+      const horaActualStr = `${String(horaActual.getHours()).padStart(2, "0")}:${String(horaActual.getMinutes()).padStart(2, "0")}`;
+
       const horariosLibres = todosLosHorarios.filter(
-        (h) => !turnosOcupados.includes(h) && !horariosBloqueados.includes(h)
+        (h) => {
+          // Si es hoy, excluir horarios pasados
+          if (esHoy && h <= horaActualStr) {
+            return false;
+          }
+          return !turnosOcupados.includes(h) && !horariosBloqueados.includes(h);
+        }
       );
       setHorarios(horariosLibres);
       
-      // Si la hora actual no está en los horarios libres pero es la misma fecha, mantenerla
       // Si cambió la fecha y la hora actual no está disponible, limpiar la hora
       if (fechaISO !== (turno.fecha ? turno.fecha.substring(0, 10) : "")) {
         if (!horariosLibres.includes(hora)) {
@@ -127,98 +147,123 @@ export default function EditarTurnoDialog({
     }
   }, [fecha, context, disponibilidadContext, turno._id, turno.fecha, hora]);
 
-  useEffect(() => {
-    if (!initialTurno) return;
-    const fechaStr = fecha ? fecha.toISOString().split("T")[0] : "";
-    const changes =
-      initialTurno.cliente !== cliente ||
-      initialTurno.mail !== mail ||
-      initialTurno.fecha.substring(0, 10) !== fechaStr ||
-      initialTurno.hora !== hora ||
-      initialTurno.servicio !== servicio;
-
-    setHasChanged(changes);
-  }, [cliente, mail, fecha, hora, servicio, initialTurno]);
-
   const shouldDisableDate = (date: Date) => {
-    // Primero verificar si es domingo - siempre deshabilitado
+    // Verificar si es día anterior
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(date);
+    fechaSeleccionada.setHours(0, 0, 0, 0);
+    if (fechaSeleccionada < hoy) {
+      return true; // Días anteriores deshabilitados
+    }
     if (isDomingo(date)) {
       return true;
     }
-    // Verificar si el día está completamente bloqueado
     const dateString = date.toISOString().split("T")[0];
     const diaNoDisponible = disponibilidadContext?.diasNoDisponibles.find(d => {
       const diaFecha = typeof d.fecha === 'string' ? d.fecha : new Date(d.fecha).toISOString().split("T")[0];
       return diaFecha === dateString || d.fecha.startsWith(dateString);
     });
-    // Un día está completamente bloqueado si tiene todos los horarios bloqueados
     const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
     if (diaNoDisponible && Array.isArray(diaNoDisponible.horarios) && diaNoDisponible.horarios.length === todosLosHorarios.length) {
-      return true; // Día completo bloqueado
+      return true;
     }
     return false;
   };
 
+  // Validar que se pueda editar (6 horas de anticipación)
+  const puedeEditar = (): { puede: boolean; razon?: string } => {
+    const fechaTurno = parseTurnoDate(turno.fecha);
+    if (!fechaTurno) return { puede: false, razon: "Fecha inválida" };
+
+    const [horaTurno, minutoTurno] = turno.hora.split(":").map(Number);
+    const fechaHoraTurno = new Date(fechaTurno);
+    fechaHoraTurno.setHours(horaTurno, minutoTurno, 0, 0);
+
+    const ahora = new Date();
+    const diferenciaMs = fechaHoraTurno.getTime() - ahora.getTime();
+    const diferenciaHoras = diferenciaMs / (1000 * 60 * 60);
+
+    if (diferenciaHoras <= 6) {
+      const horasRestantes = Math.max(0, Math.round(diferenciaHoras * 10) / 10);
+      return { 
+        puede: false, 
+        razon: `No se puede editar. Debe editarse con más de 6 horas de anticipación. Faltan ${horasRestantes} horas.` 
+      };
+    }
+
+    return { puede: true };
+  };
+
   async function handleSave() {
-    if (!cliente || !fecha || !hora) {
-      alert("Todos los campos son obligatorios");
+    const validacion = puedeEditar();
+    if (!validacion.puede) {
+      setError(validacion.razon || "No se puede editar este turno");
       return;
     }
 
-    // Validar que no sea domingo
+    if (!fecha || !hora) {
+      setError("Fecha y hora son obligatorios");
+      return;
+    }
+
     if (fecha && isDomingo(fecha)) {
-      alert("❌ Los domingos no están disponibles para turnos.");
+      setError("Los domingos no están disponibles para turnos.");
       return;
     }
 
-    // Validar que el horario esté disponible
     if (!horarios.includes(hora)) {
-      alert("❌ Este horario no está disponible. Por favor, elegí otro horario.");
+      setError("Este horario no está disponible. Por favor, elegí otro horario.");
       return;
     }
 
-    const fechaStr = fecha.toISOString().split("T")[0];
-    const turnoActualizado = {
-      ...turno,
-      cliente,
-      mail,
-      fecha: fechaStr, // yyyy-MM-dd string
-      hora,
-      servicio,
-    };
+    setLoading(true);
+    setError("");
 
     try {
-      await onUpdated(turnoActualizado as Turno);
-      alert("✅ Turno actualizado con éxito");
-      onClose();
-    } catch (error: unknown) {
-      console.error("Error actualizando turno:", error);
-      if (error instanceof Error && error.message.includes("409")) {
-        alert("❌ Este turno ya está ocupado. Por favor, elegí otro horario.");
+      const fechaStr = fecha.toISOString().split("T")[0];
+      const response = await fetch(`${API_URL}/turnos/editar/${turno._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fecha: fechaStr,
+          hora,
+          servicio,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("✅ Turno actualizado con éxito");
+        onUpdated();
+        onClose();
       } else {
-        alert("Error al actualizar el turno");
+        setError(data.error || "Error al actualizar el turno");
       }
+    } catch (err) {
+      console.error("Error actualizando turno:", err);
+      setError("Error de conexión. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
     }
   }
+
+  const validacion = puedeEditar();
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
-        <DialogTitle>✏️ Editar turno</DialogTitle>
+        <DialogTitle>✏️ Editar mi turno</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <TextField
-            label="Cliente"
-            value={cliente}
-            onChange={(e) => setCliente(e.target.value)}
-            fullWidth
-          />
-
-          <TextField
-            label="Mail"
-            value={mail}
-            onChange={(e) => setMail(e.target.value)}
-            fullWidth
-          />
+          {!validacion.puede && validacion.razon && (
+            <Alert severity="warning">{validacion.razon}</Alert>
+          )}
+          {error && (
+            <Alert severity="error">{error}</Alert>
+          )}
 
           <TextField
             label="Servicio"
@@ -288,11 +333,16 @@ export default function EditarTurnoDialog({
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} variant="contained" disabled={!hasChanged || !hora}>
-            Guardar
+          <Button 
+            onClick={handleSave} 
+            variant="contained" 
+            disabled={!validacion.puede || !hora || loading}
+          >
+            {loading ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>
     </LocalizationProvider>
   );
 }
+
