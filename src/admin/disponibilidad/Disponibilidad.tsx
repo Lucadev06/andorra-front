@@ -289,13 +289,13 @@ const Disponibilidad = () => {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             backgroundColor: isOcupado
-                              ? `${theme.palette.info.main}20`
+                              ? `${theme.palette.success.main}20`
                               : isBlocked || isDayFullyBlocked 
                               ? `${theme.palette.error.main}20` 
                               : theme.palette.background.paper,
                             border: `2px solid ${
                               isOcupado 
-                                ? theme.palette.info.main 
+                                ? theme.palette.success.main 
                                 : isBlocked || isDayFullyBlocked 
                                 ? theme.palette.error.main 
                                 : theme.palette.divider
@@ -314,7 +314,7 @@ const Disponibilidad = () => {
                               sx={{ 
                                 fontSize: '1.3rem',
                                 color: isOcupado
-                                  ? theme.palette.info.main
+                                  ? theme.palette.success.main
                                   : isBlocked || isDayFullyBlocked 
                                   ? theme.palette.error.main 
                                   : theme.palette.text.secondary
@@ -325,7 +325,7 @@ const Disponibilidad = () => {
                               fontWeight={700}
                               sx={{ 
                                 color: isOcupado
-                                  ? theme.palette.info.main
+                                  ? theme.palette.success.main
                                   : isBlocked || isDayFullyBlocked 
                                   ? theme.palette.error.main 
                                   : theme.palette.text.primary,
@@ -338,7 +338,7 @@ const Disponibilidad = () => {
                               <Chip 
                                 label="Ocupado" 
                                 size="small" 
-                                color="info"
+                                color="success"
                                 sx={{ 
                                   ml: 1, 
                                   fontWeight: 700,
