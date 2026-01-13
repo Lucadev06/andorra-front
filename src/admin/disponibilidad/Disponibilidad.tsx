@@ -14,12 +14,14 @@ import {
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { DisponibilidadContext } from '../../context/DisponibilidadContext';
+import { TurnosContext } from '../../context/TurnosContextTypes';
 import { es } from 'date-fns/locale';
 import { format } from 'date-fns';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
+import { parseTurnoDate } from '../../utils/dateUtils';
 
 const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
   const horarios = [];
@@ -77,13 +79,15 @@ const isDomingo = (date: Date) => {
 const Disponibilidad = () => {
   const theme = useTheme();
   const context = useContext(DisponibilidadContext);
+  const turnosContext = useContext(TurnosContext);
   const [fecha, setFecha] = useState<Date | null>(new Date());
 
-  if (!context) {
+  if (!context || !turnosContext) {
     return <p>Cargando...</p>;
   }
 
   const { diasNoDisponibles, addDiaNoDisponible, deleteDiaNoDisponible } = context;
+  const { turnos } = turnosContext;
 
   const handleDateChange = (value: any) => {
     if (value instanceof Date) {
@@ -193,6 +197,16 @@ const Disponibilidad = () => {
   // Un día está completamente bloqueado si tiene todos los horarios bloqueados
   const isDayFullyBlocked = selectedDayInfo && blockedHours.length === todosLosHorarios.length;
 
+  // Obtener los horarios ocupados por turnos de clientes para la fecha seleccionada
+  const turnosOcupados = turnos
+    .filter(t => {
+      const fechaTurno = parseTurnoDate(t.fecha);
+      if (!fechaTurno) return false;
+      const fechaTurnoISO = fechaTurno.toISOString().split("T")[0];
+      return fechaTurnoISO === selectedDateString;
+    })
+    .map(t => t.hora);
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: '1400px', mx: 'auto' }}>
       <Typography 
@@ -264,19 +278,28 @@ const Disponibilidad = () => {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   {todosLosHorarios.map(horario => {
                     const isBlocked = blockedHours.includes(horario);
+                    const isOcupado = turnosOcupados.includes(horario);
                     return (
                       <Box key={horario}>
                         <Paper
-                          elevation={isBlocked || isDayFullyBlocked ? 3 : 1}
+                          elevation={isBlocked || isDayFullyBlocked || isOcupado ? 3 : 1}
                           sx={{
                             p: 1.5,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            backgroundColor: isBlocked || isDayFullyBlocked 
+                            backgroundColor: isOcupado
+                              ? `${theme.palette.info.main}20`
+                              : isBlocked || isDayFullyBlocked 
                               ? `${theme.palette.error.main}20` 
                               : theme.palette.background.paper,
-                            border: `2px solid ${isBlocked || isDayFullyBlocked ? theme.palette.error.main : theme.palette.divider}`,
+                            border: `2px solid ${
+                              isOcupado 
+                                ? theme.palette.info.main 
+                                : isBlocked || isDayFullyBlocked 
+                                ? theme.palette.error.main 
+                                : theme.palette.divider
+                            }`,
                             borderRadius: 1,
                             transition: 'all 0.2s',
                             opacity: isDayFullyBlocked ? 0.7 : 1,
@@ -290,7 +313,9 @@ const Disponibilidad = () => {
                             <AccessTimeIcon 
                               sx={{ 
                                 fontSize: '1.3rem',
-                                color: isBlocked || isDayFullyBlocked 
+                                color: isOcupado
+                                  ? theme.palette.info.main
+                                  : isBlocked || isDayFullyBlocked 
                                   ? theme.palette.error.main 
                                   : theme.palette.text.secondary
                               }} 
@@ -299,7 +324,9 @@ const Disponibilidad = () => {
                               variant="body1" 
                               fontWeight={700}
                               sx={{ 
-                                color: isBlocked || isDayFullyBlocked 
+                                color: isOcupado
+                                  ? theme.palette.info.main
+                                  : isBlocked || isDayFullyBlocked 
                                   ? theme.palette.error.main 
                                   : theme.palette.text.primary,
                                 fontSize: '1.1rem'
@@ -307,7 +334,18 @@ const Disponibilidad = () => {
                             >
                               {horario}
                             </Typography>
-                            {(isBlocked || isDayFullyBlocked) && (
+                            {isOcupado ? (
+                              <Chip 
+                                label="Ocupado" 
+                                size="small" 
+                                color="info"
+                                sx={{ 
+                                  ml: 1, 
+                                  fontWeight: 700,
+                                  fontSize: '0.75rem'
+                                }}
+                              />
+                            ) : (isBlocked || isDayFullyBlocked) && (
                               <Chip 
                                 label={isDayFullyBlocked ? "Día bloqueado" : "Bloqueado"} 
                                 size="small" 
@@ -320,7 +358,17 @@ const Disponibilidad = () => {
                               />
                             )}
                           </Box>
-                          {isDayFullyBlocked ? (
+                          {isOcupado ? (
+                            <Chip 
+                              label="No disponible" 
+                              size="small" 
+                              disabled
+                              sx={{
+                                fontWeight: 600,
+                                minWidth: '120px'
+                              }}
+                            />
+                          ) : isDayFullyBlocked ? (
                             <Button
                               variant="contained"
                               color="success"

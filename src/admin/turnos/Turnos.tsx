@@ -18,6 +18,7 @@ import {
   MenuItem,
   Chip,
   Button,
+  TablePagination,
 } from "@mui/material";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -43,6 +44,14 @@ function Turnos() {
   const [filtroFecha, setFiltroFecha] = useState<Date | null>(null);
   const [filtroHora, setFiltroHora] = useState<string>("");
   const [filtroServicio, setFiltroServicio] = useState<string>("");
+
+  // Estados para paginación de clientes
+  const [pageClientes, setPageClientes] = useState(0);
+  const [rowsPerPageClientes, setRowsPerPageClientes] = useState(5);
+
+  // Estados para paginación de turnos
+  const [pageTurnos, setPageTurnos] = useState(0);
+  const [rowsPerPageTurnos, setRowsPerPageTurnos] = useState(10);
 
   if (!context) {
     return <p>Cargando...</p>;
@@ -94,18 +103,62 @@ function Turnos() {
     setFiltroFecha(null);
     setFiltroHora("");
     setFiltroServicio("");
+    setPageTurnos(0); // Resetear paginación al limpiar filtros
   };
 
   const tieneFiltrosActivos = filtroFecha || filtroHora || filtroServicio;
+
+  // Paginación de clientes
+  const clientesPaginados = useMemo(() => {
+    const start = pageClientes * rowsPerPageClientes;
+    const end = start + rowsPerPageClientes;
+    return uniqueClients.slice(start, end);
+  }, [uniqueClients, pageClientes, rowsPerPageClientes]);
+
+  // Paginación de turnos
+  const turnosOrdenados = useMemo(() => {
+    return [...turnosFiltrados].sort((a, b) => compareTurnoDates(a.fecha, b.fecha));
+  }, [turnosFiltrados]);
+
+  const turnosPaginados = useMemo(() => {
+    const start = pageTurnos * rowsPerPageTurnos;
+    const end = start + rowsPerPageTurnos;
+    return turnosOrdenados.slice(start, end);
+  }, [turnosOrdenados, pageTurnos, rowsPerPageTurnos]);
+
+  const handleChangePageClientes = (event: unknown, newPage: number) => {
+    setPageClientes(newPage);
+  };
+
+  const handleChangeRowsPerPageClientes = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPageClientes(parseInt(event.target.value, 10));
+    setPageClientes(0);
+  };
+
+  const handleChangePageTurnos = (event: unknown, newPage: number) => {
+    setPageTurnos(newPage);
+  };
+
+  const handleChangeRowsPerPageTurnos = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPageTurnos(parseInt(event.target.value, 10));
+    setPageTurnos(0);
+  };
 
   return (
     <Box sx={{ maxWidth: '1400px', mx: 'auto' }}>
       {/* Clientes Registrados */}
       <Card elevation={2} sx={{ mb: 4 }}>
         <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-            Clientes Registrados
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Clientes Registrados
+            </Typography>
+            <Chip
+              label={`${uniqueClients.length} ${uniqueClients.length === 1 ? 'cliente' : 'clientes'}`}
+              color="primary"
+              size="small"
+            />
+          </Box>
           <TableContainer>
             <Table>
               <TableHead>
@@ -124,7 +177,7 @@ function Turnos() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  uniqueClients.map(client => (
+                  clientesPaginados.map(client => (
                     <TableRow key={client.mail} hover>
                       <TableCell>{client.cliente}</TableCell>
                       <TableCell>{client.mail}</TableCell>
@@ -134,6 +187,21 @@ function Turnos() {
               </TableBody>
             </Table>
           </TableContainer>
+          {uniqueClients.length > 0 && (
+            <TablePagination
+              component="div"
+              count={uniqueClients.length}
+              page={pageClientes}
+              onPageChange={handleChangePageClientes}
+              rowsPerPage={rowsPerPageClientes}
+              onRowsPerPageChange={handleChangeRowsPerPageClientes}
+              rowsPerPageOptions={[5, 10, 25]}
+              labelRowsPerPage="Clientes por página:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
+              }
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -247,9 +315,7 @@ function Turnos() {
                   {tieneFiltrosActivos ? "No hay turnos que coincidan con los filtros" : "No hay turnos registrados"}
                 </Typography>
               ) : (
-                [...turnosFiltrados]
-                  .sort((a, b) => compareTurnoDates(a.fecha, b.fecha))
-                  .map((t) => {
+                turnosPaginados.map((t) => {
                     const adjustedDate = parseTurnoDate(t.fecha);
 
                     return (
@@ -331,9 +397,7 @@ function Turnos() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    [...turnosFiltrados]
-                      .sort((a, b) => compareTurnoDates(a.fecha, b.fecha))
-                      .map((t) => {
+                    turnosPaginados.map((t) => {
                         const adjustedDate = parseTurnoDate(t.fecha);
                         if (!adjustedDate) return null;
 
@@ -384,6 +448,21 @@ function Turnos() {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+          {turnosFiltrados.length > 0 && (
+            <TablePagination
+              component="div"
+              count={turnosFiltrados.length}
+              page={pageTurnos}
+              onPageChange={handleChangePageTurnos}
+              rowsPerPage={rowsPerPageTurnos}
+              onRowsPerPageChange={handleChangeRowsPerPageTurnos}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Turnos por página:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
+              }
+            />
           )}
         </CardContent>
       </Card>
