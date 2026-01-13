@@ -126,7 +126,7 @@ function Turnos() {
     return turnosOrdenados.slice(start, end);
   }, [turnosOrdenados, pageTurnos, rowsPerPageTurnos]);
 
-  const handleChangePageClientes = (event: unknown, newPage: number) => {
+  const handleChangePageClientes = (_event: unknown, newPage: number) => {
     setPageClientes(newPage);
   };
 
@@ -135,7 +135,7 @@ function Turnos() {
     setPageClientes(0);
   };
 
-  const handleChangePageTurnos = (event: unknown, newPage: number) => {
+  const handleChangePageTurnos = (_event: unknown, newPage: number) => {
     setPageTurnos(newPage);
   };
 
