@@ -29,10 +29,30 @@ import ClearIcon from "@mui/icons-material/Clear";
 import { useContext, useState, useMemo } from "react";
 import EditarTurnoDialog from "./EditarTurnoDialog";
 import { TurnosContext, type Turno } from "../../context/TurnosContextTypes";
-import { parseTurnoDate, compareTurnoDates } from "../../utils/dateUtils";
+import { parseTurnoDate } from "../../utils/dateUtils";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+
+const getTurnoTimestamp = (turno: Turno): number => {
+  const fecha = parseTurnoDate(turno.fecha);
+  if (!fecha) return Number.MIN_SAFE_INTEGER;
+
+  const [hora = "00", minuto = "00"] = (turno.hora || "00:00").split(":");
+  const horas = Number(hora);
+  const minutos = Number(minuto);
+
+  if (!Number.isNaN(horas)) {
+    fecha.setHours(horas);
+  }
+
+  if (!Number.isNaN(minutos)) {
+    fecha.setMinutes(minutos);
+  }
+
+  fecha.setSeconds(0, 0);
+  return fecha.getTime();
+};
 
 function Turnos() {
   const theme = useTheme();
@@ -59,7 +79,51 @@ function Turnos() {
 
   const { turnos, updateTurno, deleteTurno } = context;
 
-  const uniqueClients = [...new Map(turnos.map(turno => [turno.mail, turno])).values()];
+  const uniqueClients = useMemo(() => {
+    const sortedByNewest = [...turnos].sort((a, b) => getTurnoTimestamp(b) - getTurnoTimestamp(a));
+    const clientsByMail = new Map<string, Turno>();
+
+    sortedByNewest.forEach((turno) => {
+      const existente = clientsByMail.get(turno.mail);
+
+      if (!existente) {
+        clientsByMail.set(turno.mail, turno);
+        return;
+      }
+
+      if ((!existente.telefono || existente.telefono.trim() === "") && turno.telefono?.trim()) {
+        clientsByMail.set(turno.mail, {
+          ...existente,
+          telefono: turno.telefono,
+        });
+      }
+    });
+
+    return [...clientsByMail.values()];
+  }, [turnos]);
+
+  const phoneByMail = useMemo(() => {
+    const sortedByNewest = [...turnos].sort((a, b) => getTurnoTimestamp(b) - getTurnoTimestamp(a));
+    const phones = new Map<string, string>();
+
+    sortedByNewest.forEach((turno) => {
+      const telefono = turno.telefono?.trim();
+      if (!telefono) return;
+      if (!phones.has(turno.mail)) {
+        phones.set(turno.mail, telefono);
+      }
+    });
+
+    return phones;
+  }, [turnos]);
+
+  const getPhoneForTurno = (turno: Turno) => {
+    const telefonoTurno = turno.telefono?.trim();
+    if (telefonoTurno) return telefonoTurno;
+
+    const telefonoCliente = phoneByMail.get(turno.mail);
+    return telefonoCliente || "-";
+  };
 
   // Obtener servicios únicos para el filtro
   const serviciosUnicos = useMemo(() => {
@@ -117,7 +181,7 @@ function Turnos() {
 
   // Paginación de turnos
   const turnosOrdenados = useMemo(() => {
-    return [...turnosFiltrados].sort((a, b) => compareTurnoDates(a.fecha, b.fecha));
+    return [...turnosFiltrados].sort((a, b) => getTurnoTimestamp(b) - getTurnoTimestamp(a));
   }, [turnosFiltrados]);
 
   const turnosPaginados = useMemo(() => {
@@ -165,12 +229,13 @@ function Turnos() {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Teléfono</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {uniqueClients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         No hay clientes registrados
                       </Typography>
@@ -181,6 +246,7 @@ function Turnos() {
                     <TableRow key={client.mail} hover>
                       <TableCell>{client.cliente}</TableCell>
                       <TableCell>{client.mail}</TableCell>
+                      <TableCell>{getPhoneForTurno(client)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -328,6 +394,9 @@ function Turnos() {
                             <Typography variant="body2" color="text.secondary">
                               {t.mail}
                             </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {getPhoneForTurno(t)}
+                            </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <IconButton
@@ -381,6 +450,7 @@ function Turnos() {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600 }}>Cliente</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Teléfono</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Servicio</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Hora</TableCell>
@@ -390,7 +460,7 @@ function Turnos() {
                 <TableBody>
                   {turnosFiltrados.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                         <Typography color="text.secondary">
                           {tieneFiltrosActivos ? "No hay turnos que coincidan con los filtros" : "No hay turnos registrados"}
                         </Typography>
@@ -407,6 +477,7 @@ function Turnos() {
                         return (
                           <TableRow key={t._id} hover>
                             <TableCell>{t.cliente}</TableCell>
+                            <TableCell>{getPhoneForTurno(t)}</TableCell>
                             <TableCell>{t.servicio || "-"}</TableCell>
                             <TableCell>
                               <Tooltip title={descriptiveDate}>

@@ -22,27 +22,7 @@ import { es } from 'date-fns/locale';
 import { TurnosContext } from "../../context/TurnosContextTypes";
 import { DisponibilidadContext } from "../../context/DisponibilidadContext";
 import { parseTurnoDate } from "../../utils/dateUtils";
-
-// Helper function to generate time slots
-const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
-  const horarios = [];
-  let [hora, minuto] = inicio.split(":").map(Number);
-
-  while (true) {
-    const horarioActual = `${String(hora).padStart(2, "0")}:${String(
-      minuto
-    ).padStart(2, "0")}`;
-    if (horarioActual >= fin) break;
-    horarios.push(horarioActual);
-
-    minuto += intervalo;
-    if (minuto >= 60) {
-      hora += Math.floor(minuto / 60);
-      minuto %= 60;
-    }
-  }
-  return horarios;
-};
+import { getFixedSlotsByDate } from "../../utils/fixedSchedule";
 
 const isDomingo = (date: Date) => {
   return date.getDay() === 0; // 0 es Domingo
@@ -65,6 +45,7 @@ export default function EditarTurnoDialog({
   const disponibilidadContext = useContext(DisponibilidadContext);
   const [cliente, setCliente] = useState("");
   const [mail, setMail] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState<Date | null>(null);
   const [hora, setHora] = useState("");
   const [servicio, setServicio] = useState("");
@@ -77,6 +58,7 @@ export default function EditarTurnoDialog({
       setInitialTurno(turno);
       setCliente(turno.cliente || "");
       setMail(turno.mail || "");
+      setTelefono(turno.telefono || "");
       // Convertir string de fecha a Date object
       const fechaStr = turno.fecha ? turno.fecha.substring(0, 10) : "";
       setFecha(fechaStr ? new Date(fechaStr + 'T00:00:00') : null);
@@ -91,7 +73,7 @@ export default function EditarTurnoDialog({
     if (context && fecha && disponibilidadContext) {
       const { turnos } = context;
       const { diasNoDisponibles } = disponibilidadContext;
-      const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
+      const todosLosHorarios = getFixedSlotsByDate(fecha);
       const fechaISO = fecha.toISOString().split("T")[0];
       
       // Obtener turnos ocupados en esa fecha, excluyendo el turno actual que se está editando
@@ -136,12 +118,13 @@ export default function EditarTurnoDialog({
     const changes =
       initialTurno.cliente !== cliente ||
       initialTurno.mail !== mail ||
+      (initialTurno.telefono || "") !== telefono ||
       initialTurno.fecha.substring(0, 10) !== fechaStr ||
       initialTurno.hora !== hora ||
       initialTurno.servicio !== servicio;
 
     setHasChanged(changes);
-  }, [cliente, mail, fecha, hora, servicio, initialTurno]);
+  }, [cliente, mail, telefono, fecha, hora, servicio, initialTurno]);
 
   const shouldDisableDate = (date: Date) => {
     // Primero verificar si es domingo - siempre deshabilitado
@@ -150,13 +133,21 @@ export default function EditarTurnoDialog({
     }
     // Verificar si el día está completamente bloqueado
     const dateString = date.toISOString().split("T")[0];
+    const horariosDelDia = getFixedSlotsByDate(date);
+    if (horariosDelDia.length === 0) {
+      return true;
+    }
+
     const diaNoDisponible = disponibilidadContext?.diasNoDisponibles.find(d => {
       const diaFecha = typeof d.fecha === 'string' ? d.fecha : new Date(d.fecha).toISOString().split("T")[0];
       return diaFecha === dateString || d.fecha.startsWith(dateString);
     });
     // Un día está completamente bloqueado si tiene todos los horarios bloqueados
-    const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
-    if (diaNoDisponible && Array.isArray(diaNoDisponible.horarios) && diaNoDisponible.horarios.length === todosLosHorarios.length) {
+    if (
+      diaNoDisponible &&
+      Array.isArray(diaNoDisponible.horarios) &&
+      (diaNoDisponible.horarios.length === 0 || horariosDelDia.every((h) => diaNoDisponible.horarios.includes(h)))
+    ) {
       return true; // Día completo bloqueado
     }
     return false;
@@ -185,6 +176,7 @@ export default function EditarTurnoDialog({
       ...turno,
       cliente,
       mail,
+      telefono: telefono.trim(),
       fecha: fechaStr, // yyyy-MM-dd string
       hora,
       servicio,
@@ -220,6 +212,13 @@ export default function EditarTurnoDialog({
             label="Mail"
             value={mail}
             onChange={(e) => setMail(e.target.value)}
+            fullWidth
+          />
+
+          <TextField
+            label="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
             fullWidth
           />
 

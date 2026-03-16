@@ -22,26 +22,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
 import { parseTurnoDate } from '../../utils/dateUtils';
-
-const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
-  const horarios = [];
-  let [hora, minuto] = inicio.split(":").map(Number);
-
-  while (true) {
-    const horarioActual = `${String(hora).padStart(2, "0")}:${String(
-      minuto
-    ).padStart(2, "0")}`;
-    if (horarioActual >= fin) break;
-    horarios.push(horarioActual);
-
-    minuto += intervalo;
-    if (minuto >= 60) {
-      hora += Math.floor(minuto / 60);
-      minuto %= 60;
-    }
-  }
-  return horarios;
-};
+import { getFixedSlotsByDate } from '../../utils/fixedSchedule';
 
 // Función helper para parsear fecha sin problemas de zona horaria
 const parseDateString = (dateString: string): Date | null => {
@@ -69,7 +50,17 @@ const getUtcDateString = (date: Date) => {
   return d.toISOString().split("T")[0];
 };
 
-const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
+const isDayFullyBlockedByConfig = (daySlots: string[], blockedSlots: string[]) => {
+  if (daySlots.length === 0) {
+    return true;
+  }
+
+  if (blockedSlots.length === 0) {
+    return true;
+  }
+
+  return daySlots.every((slot) => blockedSlots.includes(slot));
+};
 
 // Función para verificar si es domingo
 const isDomingo = (date: Date) => {
@@ -89,7 +80,7 @@ const Disponibilidad = () => {
   const { diasNoDisponibles, addDiaNoDisponible, deleteDiaNoDisponible } = context;
   const { turnos } = turnosContext;
 
-  const handleDateChange = (value: any) => {
+  const handleDateChange = (value: unknown) => {
     if (value instanceof Date) {
       // Validar que no sea domingo
       if (isDomingo(value)) {
@@ -126,9 +117,13 @@ const Disponibilidad = () => {
         alert("Los domingos no están disponibles para bloquear.");
         return;
       }
-      // Enviar todos los horarios bloqueados en lugar de [] vacío
-      // Esto permite desbloquear horarios individuales después
-      addDiaNoDisponible(getUtcDateString(fecha), todosLosHorarios);
+      const horariosDelDia = getFixedSlotsByDate(fecha);
+      if (horariosDelDia.length === 0) {
+        alert("Este día no tiene horarios habilitados.");
+        return;
+      }
+
+      addDiaNoDisponible(getUtcDateString(fecha), horariosDelDia);
     }
   };
 
@@ -171,13 +166,13 @@ const Disponibilidad = () => {
         return diaFecha === dateString;
       });
       if (dia) {
+        const horariosDelDia = getFixedSlotsByDate(date);
         const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
-        // Si tiene todos los horarios bloqueados, es día completo bloqueado
-        if (horarios.length === todosLosHorarios.length) {
+        if (isDayFullyBlockedByConfig(horariosDelDia, horarios)) {
           return 'blocked-day';
         }
-        // Si tiene algunos horarios bloqueados, es parcialmente bloqueado
-        if (horarios.length > 0) {
+
+        if (horarios.some((slot) => horariosDelDia.includes(slot))) {
           return 'partially-blocked-day';
         }
       }
@@ -194,8 +189,8 @@ const Disponibilidad = () => {
   const blockedHours = selectedDayInfo && Array.isArray(selectedDayInfo.horarios) 
     ? selectedDayInfo.horarios 
     : [];
-  // Un día está completamente bloqueado si tiene todos los horarios bloqueados
-  const isDayFullyBlocked = selectedDayInfo && blockedHours.length === todosLosHorarios.length;
+  const selectedDaySlots = fecha ? getFixedSlotsByDate(fecha) : [];
+  const isDayFullyBlocked = !!selectedDayInfo && isDayFullyBlockedByConfig(selectedDaySlots, blockedHours);
 
   // Obtener los horarios ocupados por turnos de clientes para la fecha seleccionada
   const turnosOcupados = turnos
@@ -276,7 +271,7 @@ const Disponibilidad = () => {
                 </Box>
                 <Divider sx={{ mb: 2 }} />
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-                  {todosLosHorarios.map(horario => {
+                  {selectedDaySlots.map(horario => {
                     const isBlocked = blockedHours.includes(horario);
                     const isOcupado = turnosOcupados.includes(horario);
                     return (
@@ -445,11 +440,6 @@ const Disponibilidad = () => {
               ) : (
                 <Box>
                   {diasNoDisponibles
-                    .filter(dia => {
-                      // Filtrar días que tengan al menos un horario bloqueado
-                      const horariosArray = Array.isArray(dia.horarios) ? dia.horarios : [];
-                      return horariosArray.length > 0;
-                    })
                     .sort((a, b) => {
                       const fechaA = parseDateString(a.fecha);
                       const fechaB = parseDateString(b.fecha);
@@ -464,8 +454,8 @@ const Disponibilidad = () => {
                       const diaSemana = format(fechaParsed, 'EEEE', { locale: es });
                       const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
                       const horariosArray = Array.isArray(dia.horarios) ? dia.horarios : [];
-                      // Un día está completamente bloqueado si tiene todos los horarios bloqueados
-                      const esDiaCompleto = horariosArray.length === todosLosHorarios.length;
+                      const horariosDelDia = getFixedSlotsByDate(fechaParsed);
+                      const esDiaCompleto = isDayFullyBlockedByConfig(horariosDelDia, horariosArray);
                       
                       return (
                         <Paper 

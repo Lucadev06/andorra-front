@@ -10,6 +10,7 @@ import {
   Alert,
   Box,
   Paper,
+  TextField,
 } from "@mui/material";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import { GiBeard } from "react-icons/gi";
@@ -21,27 +22,7 @@ import { es } from 'date-fns/locale';
 import { TurnosContext } from "../context/TurnosContextTypes";
 import { DisponibilidadContext } from "../context/DisponibilidadContext";
 import { parseTurnoDate } from "../utils/dateUtils";
-
-// Helper function to generate time slots
-const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
-  const horarios = [];
-  let [hora, minuto] = inicio.split(":").map(Number);
-
-  while (true) {
-    const horarioActual = `${String(hora).padStart(2, "0")}:${String(
-      minuto
-    ).padStart(2, "0")}`;
-    if (horarioActual >= fin) break;
-    horarios.push(horarioActual);
-
-    minuto += intervalo;
-    if (minuto >= 60) {
-      hora += Math.floor(minuto / 60);
-      minuto %= 60;
-    }
-  }
-  return horarios;
-};
+import { getFixedSlotsByDate } from "../utils/fixedSchedule";
 
 const isDomingo = (date: Date) => {
   return date.getDay() === 0; // 0 es Domingo
@@ -54,6 +35,7 @@ interface Turno {
   cliente: string;
   mail: string;
   servicio?: string;
+  telefono?: string;
 }
 
 interface EditarTurnoClienteDialogProps {
@@ -74,6 +56,7 @@ export default function EditarTurnoClienteDialog({
   const context = useContext(TurnosContext);
   const disponibilidadContext = useContext(DisponibilidadContext);
   const [servicio, setServicio] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState<Date | null>(null);
   const [hora, setHora] = useState("");
   const [horarios, setHorarios] = useState<string[]>([]);
@@ -83,6 +66,7 @@ export default function EditarTurnoClienteDialog({
   useEffect(() => {
     if (turno) {
       setServicio(turno.servicio || "");
+      setTelefono(turno.telefono || "");
       const fechaStr = turno.fecha ? turno.fecha.substring(0, 10) : "";
       setFecha(fechaStr ? new Date(fechaStr + 'T00:00:00') : null);
       setHora(turno.hora || "");
@@ -95,7 +79,7 @@ export default function EditarTurnoClienteDialog({
     if (context && fecha && disponibilidadContext) {
       const { turnos } = context;
       const { diasNoDisponibles } = disponibilidadContext;
-      const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
+      const todosLosHorarios = getFixedSlotsByDate(fecha);
       const fechaISO = fecha.toISOString().split("T")[0];
       
       // Obtener turnos ocupados en esa fecha, excluyendo el turno actual
@@ -162,12 +146,21 @@ export default function EditarTurnoClienteDialog({
       return true;
     }
     const dateString = date.toISOString().split("T")[0];
+    const horariosDelDia = getFixedSlotsByDate(date);
+    if (horariosDelDia.length === 0) {
+      return true;
+    }
+
     const diaNoDisponible = disponibilidadContext?.diasNoDisponibles.find(d => {
       const diaFecha = typeof d.fecha === 'string' ? d.fecha : new Date(d.fecha).toISOString().split("T")[0];
       return diaFecha === dateString || d.fecha.startsWith(dateString);
     });
-    const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
-    if (diaNoDisponible && Array.isArray(diaNoDisponible.horarios) && diaNoDisponible.horarios.length === todosLosHorarios.length) {
+
+    if (
+      diaNoDisponible &&
+      Array.isArray(diaNoDisponible.horarios) &&
+      (diaNoDisponible.horarios.length === 0 || horariosDelDia.every((h) => diaNoDisponible.horarios.includes(h)))
+    ) {
       return true;
     }
     return false;
@@ -233,6 +226,7 @@ export default function EditarTurnoClienteDialog({
           fecha: fechaStr,
           hora,
           servicio,
+          telefono: telefono.trim(),
         }),
       });
 
@@ -266,6 +260,14 @@ export default function EditarTurnoClienteDialog({
           {error && (
             <Alert severity="error">{error}</Alert>
           )}
+
+          <TextField
+            label="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            fullWidth
+            disabled={!validacion.puede}
+          />
 
           <Typography variant="subtitle1" sx={{ fontWeight: "bold", mt: 1 }}>
             Seleccioná el servicio:

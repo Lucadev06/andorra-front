@@ -1,10 +1,8 @@
 import { useContext, useEffect, useState } from "react";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import { GiBeard } from "react-icons/gi";
-import { TurnosContext } from "../context/TurnosContextTypes";
-import { useAuth } from '../context/AuthContext';
-import { DisponibilidadContext } from '../context/DisponibilidadContext';
-import { parseTurnoDate } from "../utils/dateUtils";
 import {
   Dialog,
   DialogTitle,
@@ -16,174 +14,173 @@ import {
   Typography,
   Box,
   Paper,
-  TextField
+  TextField,
 } from "@mui/material";
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { es } from 'date-fns/locale';
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { TurnosContext } from "../context/TurnosContextTypes";
+import { useAuth } from "../context/AuthContext";
+import { DisponibilidadContext } from "../context/DisponibilidadContext";
+import { parseTurnoDate } from "../utils/dateUtils";
+import {
+  getFixedSlotsByDate,
+  isDateWithinAdvanceBookingWindow,
+  isTimeAllowedForDate,
+  MAX_ADVANCE_BOOKING_DAYS,
+} from "../utils/fixedSchedule.ts";
 
 interface AgregarTurnosDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-// Helper function to generate time slots
-const generarHorarios = (inicio: string, fin: string, intervalo: number) => {
-  const horarios = [];
-  let [hora, minuto] = inicio.split(":").map(Number);
+const isDomingo = (date: Date) => date.getDay() === 0;
 
-  while (true) {
-    const horarioActual = `${String(hora).padStart(2, "0")}:${String(
-      minuto
-    ).padStart(2, "0")}`;
-    if (horarioActual >= fin) break;
-    horarios.push(horarioActual);
+const getDateKey = (date: Date) =>
+  new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    .toISOString()
+    .split("T")[0];
 
-    minuto += intervalo;
-    if (minuto >= 60) {
-      hora += Math.floor(minuto / 60);
-      minuto %= 60;
-    }
+const normalizeStoredDate = (value: string | Date) => {
+  if (typeof value === "string") {
+    return value.split("T")[0];
   }
-  return horarios;
-};
 
-// Feriados (formato YYYY-MM-DD)
-const feriados: string[] = [
-  // "2024-12-25", 
-  // "2025-01-01",
-];
-
-const isDomingo = (date: Date) => {
-  return date.getDay() === 0; // 0 es Domingo
-};
-
-const isFeriado = (date: Date) => {
-  const dateString = date.toISOString().split("T")[0];
-  return feriados.includes(dateString);
+  return new Date(value).toISOString().split("T")[0];
 };
 
 export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDialogProps) {
-  // 1. Hooks
   const context = useContext(TurnosContext);
   const disponibilidadContext = useContext(DisponibilidadContext);
   const { user, isAuthenticated } = useAuth();
-  const [servicio, setServicio] = useState<string>("");
+
   const [fecha, setFecha] = useState<Date | null>(null);
-  const [horarios, setHorarios] = useState<string[]>([]);
-  const [hora, setHora] = useState<string>("");
+  const [hora, setHora] = useState("");
+  const [openDetalleModal, setOpenDetalleModal] = useState(false);
+  const [servicio, setServicio] = useState("");
+  const [telefono, setTelefono] = useState("");
 
-  const shouldDisableDate = (date: Date) => {
-    // Verificar si es día anterior
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const fechaSeleccionada = new Date(date);
-    fechaSeleccionada.setHours(0, 0, 0, 0);
-    if (fechaSeleccionada < hoy) {
-      return true; // Días anteriores deshabilitados
-    }
-    // Primero verificar si es domingo - siempre deshabilitado
-    if (isDomingo(date)) {
-      return true;
-    }
-    // Verificar si es feriado
-    if (isFeriado(date)) {
-      return true;
-    }
-    // Verificar si el día está completamente bloqueado
-    const dateString = date.toISOString().split("T")[0];
-    const diaNoDisponible = disponibilidadContext?.diasNoDisponibles.find(d => {
-      const diaFecha = typeof d.fecha === 'string' ? d.fecha : new Date(d.fecha).toISOString().split("T")[0];
-      return diaFecha === dateString || d.fecha.startsWith(dateString);
-    });
-    if (diaNoDisponible && (!diaNoDisponible.horarios || diaNoDisponible.horarios.length === 0)) {
-      return true; // Día completo bloqueado
-    }
-    return false;
-  };
-
-  // Effect for calculating available slots
-  useEffect(() => {
-    if (context && fecha && disponibilidadContext) {
-      const { turnos } = context;
-      const { diasNoDisponibles } = disponibilidadContext;
-      const todosLosHorarios = generarHorarios("10:00", "20:00", 30);
-      const fechaISO = fecha.toISOString().split("T")[0];
-      const turnosOcupados = turnos
-        .filter(
-          (t) => {
-            const fechaTurno = parseTurnoDate(t.fecha);
-            if (!fechaTurno) return false;
-            const fechaTurnoISO = fechaTurno.toISOString().split("T")[0];
-            return fechaTurnoISO === fechaISO;
-          }
-        )
-        .map((t) => t.hora);
-      
-      const diaNoDisponible = diasNoDisponibles.find(d => d.fecha.startsWith(fechaISO));
-      const horariosBloqueados = diaNoDisponible ? diaNoDisponible.horarios : [];
-
-      // Si es el día de hoy, filtrar horarios pasados
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const fechaSeleccionada = new Date(fecha);
-      fechaSeleccionada.setHours(0, 0, 0, 0);
-      const esHoy = fechaSeleccionada.getTime() === hoy.getTime();
-      
-      const horaActual = new Date();
-      const horaActualStr = `${String(horaActual.getHours()).padStart(2, "0")}:${String(horaActual.getMinutes()).padStart(2, "0")}`;
-
-      const horariosLibres = todosLosHorarios.filter(
-        (h) => {
-          // Si es hoy, excluir horarios pasados
-          if (esHoy && h <= horaActualStr) {
-            return false;
-          }
-          return !turnosOcupados.includes(h) && !horariosBloqueados.includes(h);
-        }
-      );
-      setHorarios(horariosLibres);
-    } else {
-      setHorarios([]);
-    }
-  }, [fecha, context, disponibilidadContext]); // Depend on context object
-
-  // Effect for cleaning up the dialog state
   useEffect(() => {
     if (!open) {
       setFecha(null);
       setHora("");
+      setOpenDetalleModal(false);
       setServicio("");
-      setHorarios([]);
+      setTelefono("");
     }
   }, [open]);
 
-  // 2. Guard clause for context
-  if (!context) {
-    return null; // Or a loading spinner
+  if (!context || !disponibilidadContext) {
+    return null;
   }
 
-  // 3. Destructure from context
-  const { addTurno } = context;
+  const { addTurno, turnos } = context;
+  const { diasNoDisponibles } = disponibilidadContext;
 
-  // 4. Event Handlers
-  async function handleConfirm() {
+  const minDate = new Date();
+  minDate.setHours(0, 0, 0, 0);
+
+  const maxDate = new Date(minDate);
+  maxDate.setDate(maxDate.getDate() + MAX_ADVANCE_BOOKING_DAYS);
+
+  const getAvailableSlotsForDate = (selectedDate: Date | null) => {
+    if (!selectedDate) return [];
+
+    const fechaISO = getDateKey(selectedDate);
+    const daySlots = getFixedSlotsByDate(selectedDate);
+    if (daySlots.length === 0) return [];
+
+    const turnosOcupados = turnos
+      .filter((t) => {
+        const fechaTurno = parseTurnoDate(t.fecha);
+        if (!fechaTurno) return false;
+        return getDateKey(fechaTurno) === fechaISO;
+      })
+      .map((t) => t.hora);
+
+    const diaNoDisponible = diasNoDisponibles.find((d) => normalizeStoredDate(d.fecha) === fechaISO);
+    const horariosBloqueados =
+      diaNoDisponible && Array.isArray(diaNoDisponible.horarios)
+        ? diaNoDisponible.horarios
+        : [];
+
+    const isFullDayBlocked =
+      !!diaNoDisponible &&
+      (horariosBloqueados.length === 0 || daySlots.every((slot: string) => horariosBloqueados.includes(slot)));
+
+    if (isFullDayBlocked) return [];
+
+    const today = new Date();
+    const isToday = getDateKey(today) === fechaISO;
+    const nowTime = `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
+
+    return daySlots.filter((slot: string) => {
+      if (isToday && slot <= nowTime) return false;
+      return !turnosOcupados.includes(slot) && !horariosBloqueados.includes(slot);
+    });
+  };
+
+  const horariosDisponibles = getAvailableSlotsForDate(fecha);
+
+  const tileDisabled = ({ date, view }: { date: Date; view: string }) => {
+    if (view !== "month") return false;
+
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+
+    if (normalized < minDate) return true;
+    if (normalized > maxDate) return true;
+    if (!isDateWithinAdvanceBookingWindow(normalized)) return true;
+    if (isDomingo(normalized)) return true;
+
+    return getFixedSlotsByDate(normalized).length === 0;
+  };
+
+  const handleDateChange = (value: unknown) => {
+    if (!(value instanceof Date)) return;
+
+    if (isDomingo(value)) {
+      alert("Los domingos no están disponibles para turnos.");
+      return;
+    }
+
+    setFecha(value);
+    setHora("");
+  };
+
+  const handleOpenDetails = () => {
+    if (!fecha || !hora) {
+      alert("Seleccioná día y horario para continuar.");
+      return;
+    }
+
+    setOpenDetalleModal(true);
+  };
+
+  const handleConfirm = async () => {
     if (!isAuthenticated || !user) {
       alert("Debes iniciar sesión para sacar un turno.");
       return;
     }
-    if (!context) {
-      return;
-    }
-    if (!servicio || !fecha || !hora) {
-      alert("Completa todos los campos: servicio, fecha y horario.");
+
+    if (!fecha || !hora || !servicio) {
+      alert("Completá todos los campos.");
       return;
     }
 
-    // Validación adicional: verificar que no sea domingo
-    if (fecha && isDomingo(fecha)) {
-      alert("❌ Los domingos no están disponibles para turnos.");
+    const telefonoNormalizado = telefono.trim();
+    if (telefonoNormalizado.length < 8) {
+      alert("Ingresá un número de teléfono válido.");
+      return;
+    }
+
+    if (!isDateWithinAdvanceBookingWindow(fecha)) {
+      alert("Solo se puede reservar hasta 14 días de anticipación.");
+      return;
+    }
+
+    if (!isTimeAllowedForDate(fecha, hora)) {
+      alert("Ese horario no está habilitado para el día seleccionado.");
       return;
     }
 
@@ -191,11 +188,14 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       await addTurno({
         cliente: user.name,
         mail: user.email,
+        telefono: telefonoNormalizado,
         fecha: fecha.toISOString().split("T")[0],
         hora,
         servicio,
       });
+
       alert("✅ Turno reservado con éxito");
+      setOpenDetalleModal(false);
       onClose();
     } catch (err: unknown) {
       console.error("Error creando turno:", err);
@@ -205,21 +205,103 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
         alert("Error al reservar el turno.");
       }
     }
-  }
+  };
 
-  // 5. Render
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" scroll="paper">
-
+    <>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
         <DialogTitle sx={{ fontWeight: "bold" }}>📅 Sacar turno</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            Podés sacar turno para hoy, mañana o cualquier día hasta 14 días de anticipación.
+          </Typography>
 
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <Calendar
+              onChange={handleDateChange}
+              value={fecha}
+              locale="es"
+              tileDisabled={tileDisabled}
+              minDate={minDate}
+              maxDate={maxDate}
+              className="mini-calendar"
+            />
+          </Box>
+
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            {fecha
+              ? `Horarios disponibles para ${format(fecha, "d 'de' MMMM", { locale: es })}`
+              : "Seleccioná un día para ver horarios"}
+          </Typography>
+
+          <ToggleButtonGroup
+            value={hora || null}
+            exclusive
+            onChange={(_, value) => setHora(value || "")}
+            sx={{ flexWrap: "wrap", gap: 1 }}
+          >
+            {horariosDisponibles.length > 0 ? (
+              horariosDisponibles.map((slot: string) => (
+                <ToggleButton
+                  key={slot}
+                  value={slot}
+                  sx={{
+                    borderRadius: 2,
+                    border: "1px solid #ccc",
+                    textTransform: "none",
+                    px: 2,
+                    "&.Mui-selected": {
+                      backgroundColor: "#f2a900",
+                      color: "black",
+                      fontWeight: "bold",
+                    },
+                  }}
+                >
+                  {slot}
+                </ToggleButton>
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {fecha ? "No hay horarios disponibles para este día" : ""}
+              </Typography>
+            )}
+          </ToggleButtonGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button variant="contained" onClick={handleOpenDetails} disabled={!fecha || !hora}>
+            Continuar
+          </Button>
+        </DialogActions>
+
+        <style>{`
+          .mini-calendar {
+            width: 100% !important;
+            max-width: 320px;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 12px;
+            padding: 8px;
+          }
+          .mini-calendar .react-calendar__tile--active {
+            background: #f2a900 !important;
+            color: #000 !important;
+          }
+        `}</style>
+      </Dialog>
+
+      <Dialog open={openDetalleModal} onClose={() => setOpenDetalleModal(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontWeight: "bold" }}>Confirmar turno</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {fecha ? `Día: ${format(fecha, "d 'de' MMMM yyyy", { locale: es })}` : ""}
+            {hora ? ` · Hora: ${hora}` : ""}
+          </Typography>
+
           <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-            Seleccioná el servicio:
+            Servicio:
           </Typography>
           <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(120px, 1fr))" gap={2}>
-            {[ 
+            {[
               { key: "Corte", label: "Corte", icon: <ContentCutIcon /> },
               { key: "Barba", label: "Barba", icon: <GiBeard size={22} /> },
               {
@@ -235,9 +317,7 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
               <Paper
                 key={s.key}
                 elevation={servicio === s.key ? 6 : 1}
-                onClick={() => {
-                  setServicio(s.key);
-                }}
+                onClick={() => setServicio(s.key)}
                 sx={{
                   p: 2,
                   textAlign: "center",
@@ -257,115 +337,21 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
             ))}
           </Box>
 
-
-
-          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-            Tus datos:
-          </Typography>
-          {isAuthenticated && user ? (
-            <Box display="flex" flexDirection="column" gap={2}>
-              <TextField
-                fullWidth
-                label="Nombre"
-                value={user.name}
-              />
-              <TextField
-                fullWidth
-                label="Email"
-                value={user.email}
-              />
-              <Typography variant="caption" color="text.secondary">
-                Tus datos se tomarán de tu cuenta de Google.
-              </Typography>
-            </Box>
-          ) : (
-            <Box display="flex" flexDirection="column" gap={2}>
-              <TextField
-                fullWidth
-                label="Nombre"
-                value=""
-                disabled
-                helperText="Inicia sesión con Google para reservar un turno."
-              />
-              <TextField
-                fullWidth
-                label="Email"
-                value=""
-                disabled
-              />
-            </Box>
-          )}
-
-          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-            Seleccioná la fecha:
-          </Typography>
-          <DatePicker
-            label="Fecha"
-            value={fecha}
-            onChange={(newDate) => {
-              // Validar que no sea domingo antes de establecer la fecha
-              if (newDate && isDomingo(newDate)) {
-                alert("Los domingos no están disponibles para turnos.");
-                return;
-              }
-              setFecha(newDate);
-              setHora("");
-            }}
-            shouldDisableDate={shouldDisableDate}
-            disablePast
-            disabled={!servicio}
-            slotProps={{
-              textField: {
-                helperText: "Los domingos no están disponibles"
-              }
-            }}
+          <TextField
+            fullWidth
+            label="Número de teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            placeholder="Ej: 1134567890"
           />
-
-          <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-            Seleccioná un horario:
-          </Typography>
-          <ToggleButtonGroup
-            value={hora || null}
-            exclusive
-            onChange={(_, value) => setHora(value)}
-            sx={{ flexWrap: "wrap", gap: 1 }}
-          >
-            {horarios.length > 0 ? (
-              horarios.map((h) => (
-                <ToggleButton
-                  key={h}
-                  value={h}
-                  disabled={!fecha}
-                  sx={{
-                    borderRadius: 2,
-                    border: "1px solid #ccc",
-                    textTransform: "none",
-                    px: 2,
-                    "&.Mui-selected": {
-                      backgroundColor: "#f2a900",
-                      color: "black",
-                      fontWeight: "bold",
-                    },
-                  }}
-                >
-                  {h}
-                </ToggleButton>
-              ))
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No hay horarios disponibles
-              </Typography>
-            )}
-          </ToggleButtonGroup>
         </DialogContent>
-
         <DialogActions>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="contained" onClick={handleConfirm} disabled={!hora}>
-            Confirmar
+          <Button onClick={() => setOpenDetalleModal(false)}>Volver</Button>
+          <Button variant="contained" onClick={handleConfirm} disabled={!servicio || !telefono.trim()}>
+            Confirmar turno
           </Button>
         </DialogActions>
       </Dialog>
-    </LocalizationProvider>
+    </>
   );
 }

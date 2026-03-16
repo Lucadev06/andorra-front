@@ -5,6 +5,7 @@ export interface Turno {
   _id:string;
   cliente: string;
   mail: string;
+  telefono?: string;
   fecha: string;
   hora: string;
   servicio?: string;
