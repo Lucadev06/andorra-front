@@ -35,9 +35,6 @@ export const TurnosProvider = ({ children }: TurnosProviderProps) => {
       if (res.ok) {
         fetchTurnos(); // Re-fetch all turnos to get the latest list
       } else {
-        if (res.status === 409) {
-          throw new Error("409");
-        }
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to add turno");
       }

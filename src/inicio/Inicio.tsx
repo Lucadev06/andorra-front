@@ -54,12 +54,12 @@ export default function Inicio() {
     logout();
   };
 
-  const [hasTurnosVigentes, setHasTurnosVigentes] = useState(false);
+  const [cantidadTurnosVigentes, setCantidadTurnosVigentes] = useState(0);
 
   useEffect(() => {
     const fetchTurnos = async () => {
       if (!isAuthenticated || !user?.email) {
-        setHasTurnosVigentes(false);
+        setCantidadTurnosVigentes(0);
         return;
       }
 
@@ -69,19 +69,19 @@ export default function Inicio() {
           const data = await response.json();
           const hoy = new Date();
           hoy.setHours(0, 0, 0, 0);
-          const hayVigentes = data.data.some((t: Turno) => {
+          const vigentes = data.data.filter((t: Turno) => {
             const fechaTurno = parseTurnoDate(t.fecha);
             if (!fechaTurno) return false;
             fechaTurno.setHours(0, 0, 0, 0);
             return fechaTurno >= hoy;
           });
-          setHasTurnosVigentes(hayVigentes);
+          setCantidadTurnosVigentes(vigentes.length);
         } else {
-          setHasTurnosVigentes(false);
+          setCantidadTurnosVigentes(0);
         }
       } catch (err) {
         console.error("Error al obtener turnos", err);
-        setHasTurnosVigentes(false);
+        setCantidadTurnosVigentes(0);
       }
     };
 
@@ -109,8 +109,8 @@ export default function Inicio() {
               size="large"
               sx={buttonStylesInicio}
               onClick={() => {
-                if (hasTurnosVigentes) {
-                  alert("Ya tenés un turno reservado, no podés sacar otro.");
+                if (cantidadTurnosVigentes >= 5) {
+                  alert("Ya tenés 5 turnos reservados, no podés sacar otro.");
                   return;
                 }
                 setOpenDialog(true);
@@ -192,13 +192,13 @@ export default function Inicio() {
                 const data = await response.json();
                 const hoy = new Date();
                 hoy.setHours(0, 0, 0, 0);
-                const hayVigentes = data.data.some((t: Turno) => {
+                const vigentes = data.data.filter((t: Turno) => {
                   const fechaTurno = parseTurnoDate(t.fecha);
                   if (!fechaTurno) return false;
                   fechaTurno.setHours(0, 0, 0, 0);
                   return fechaTurno >= hoy;
                 });
-                setHasTurnosVigentes(hayVigentes);
+                setCantidadTurnosVigentes(vigentes.length);
               }
             } catch (err) {
               console.error("Error al obtener turnos", err);

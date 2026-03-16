@@ -199,8 +199,12 @@ export default function AgregarTurnosDialog({ open, onClose }: AgregarTurnosDial
       onClose();
     } catch (err: unknown) {
       console.error("Error creando turno:", err);
-      if (err instanceof Error && err.message.includes("409")) {
+      if (err instanceof Error && err.message.includes("Ya tenés 5 turnos reservados")) {
+        alert("Ya tenés 5 turnos reservados, no podés sacar otro.");
+      } else if (err instanceof Error && err.message.includes("ocupado")) {
         alert("❌ Este turno ya está ocupado. Por favor, elegí otro horario.");
+      } else if (err instanceof Error && err.message.includes("bloqueado")) {
+        alert("❌ Ese horario está bloqueado y no se puede reservar.");
       } else {
         alert("Error al reservar el turno.");
       }
